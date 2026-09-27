@@ -24,17 +24,41 @@ export default function Page() {
   useEffect(() => onAuthStateChanged(auth, async (currentUser) => {
     setUser(currentUser)
     if (!currentUser) { setRole(null); setLoading(false); return }
-    const profile = await getDoc(doc(db, 'users', currentUser.uid))
-    const storedRole = profile.data()?.role
-    setRole(storedRole === 'content' || storedRole === 'creator' ? storedRole : 'lead')
-    setLoading(false)
+    try {
+      const profile = await getDoc(doc(db, 'users', currentUser.uid))
+      const storedRole = profile.data()?.role
+      const emailRole = currentUser.email?.split('@')[0]
+      const fallbackRole = emailRole === 'content' || emailRole === 'creator' ? emailRole : 'lead'
+      setRole(storedRole === 'content' || storedRole === 'creator' || storedRole === 'lead' ? storedRole : fallbackRole)
+    } catch {
+      const emailRole = currentUser.email?.split('@')[0]
+      setRole(emailRole === 'content' || emailRole === 'creator' ? emailRole : 'lead')
+    } finally {
+      setLoading(false)
+    }
   }), [])
 
   const login = async (loginEmail = email, loginPassword = password) => {
     setBusy(true); setError('')
     try { await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword) }
-    catch { setError('Email hoặc mật khẩu chưa đúng. Hãy kiểm tra tài khoản Firebase và thử lại.') }
-    finally { setBusy(false) }
+    catch (firebaseError: any) {
+      const code = firebaseError?.code
+      const rawMessage = String(firebaseError?.message ?? '').toLowerCase()
+      const messages: Record<string, string> = {
+        'auth/invalid-credential': 'Email hoặc mật khẩu không đúng.',
+        'auth/user-not-found': 'Chưa có tài khoản này trong Firebase Auth.',
+        'auth/wrong-password': 'Mật khẩu không đúng.',
+        'auth/invalid-api-key': 'Firebase API key không hợp lệ. Kiểm tra biến môi trường Firebase.',
+        'auth/operation-not-allowed': 'Firebase chưa bật phương thức đăng nhập Email/Password.',
+        'auth/network-request-failed': 'Không kết nối được Firebase. Kiểm tra mạng rồi thử lại.',
+      }
+      const setupMessage = rawMessage.includes('api-keys-are-not-supported')
+        ? 'Firebase API key đang không đúng loại Web API key. Hãy dùng API key trong Firebase Console > Project settings > Your apps > Web app.'
+        : rawMessage.includes('configuration-not-found')
+          ? 'Không tìm thấy cấu hình Firebase project. Kiểm tra Project ID và Auth Domain.'
+          : null
+      setError(`${setupMessage ?? messages[code] ?? 'Đăng nhập Firebase thất bại.'}${code ? ` (${code})` : ''}`)
+    } finally { setBusy(false) }
   }
 
   if (loading) return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Đang kiểm tra phiên đăng nhập...</div>
