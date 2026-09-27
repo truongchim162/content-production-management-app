@@ -3,17 +3,13 @@ import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? process.env.VITE_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? process.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? process.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? process.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? process.env.VITE_FIREBASE_APP_ID,
+  apiKey: 'AIzaSyAPe3La7wZNqKsoON0TNDAvAu09f_KzA5M',
+  authDomain: 'mediahos.firebaseapp.com',
+  projectId: 'mediahos',
+  storageBucket: 'mediahos.firebasestorage.app',
+  messagingSenderId: '136237091480',
+  appId: '1:136237091480:web:e0567fb715156836fc9eed',
 } as const
-
-if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId || !firebaseConfig.appId) {
-  throw new Error('Thiếu cấu hình Firebase Web. Hãy kiểm tra NEXT_PUBLIC_FIREBASE_* trong Vercel Vars.')
-}
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 
