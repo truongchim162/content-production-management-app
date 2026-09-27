@@ -1,6 +1,6 @@
-import { getApp, getApps, initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { deleteApp, getApp, getApps, initializeApp } from 'firebase/app'
+import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'
+import { doc, getFirestore, serverTimestamp, setDoc } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAPe3La7wZNqKsoON0TNDAvAu09f_KzA5M',
@@ -23,3 +23,23 @@ export const demoAccounts = [
   { role: 'content' as const, email: 'content@happyorsad.vn', label: 'Đăng nhập Demo: Content', initials: 'CO' },
   { role: 'creator' as const, email: 'creator@happyorsad.vn', label: 'Đăng nhập Demo: Creator', initials: 'CR' },
 ]
+
+export async function createTeamMemberAccount(input: { name: string; email: string; password: string; role: Exclude<UserRole, 'lead'> }) {
+  const secondary = initializeApp(firebaseConfig, `team-member-${Date.now()}`)
+  const secondaryAuth = getAuth(secondary)
+  try {
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, input.email.trim(), input.password)
+    await setDoc(doc(db, 'users', credential.user.uid), {
+      uid: credential.user.uid,
+      name: input.name.trim(),
+      email: input.email.trim().toLowerCase(),
+      role: input.role,
+      createdAt: serverTimestamp(),
+      status: 'active',
+    })
+    await signOut(secondaryAuth)
+    return credential.user.uid
+  } finally {
+    await deleteApp(secondary)
+  }
+}
