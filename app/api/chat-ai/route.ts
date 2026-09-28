@@ -1,3 +1,5 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
 const SYSTEM_PROMPT = `Bạn là Chuyên gia Chiến lược Content & Scriptwriter hàng đầu cho thương hiệu thời trang nam công sở HAPPYORSAD (chuyên Quần âu sidetab/cạp chun ẩn/xếp li, Áo sơ mi chống nhăn, Polo).
 
 Quy tắc bắt buộc:
@@ -29,32 +31,24 @@ export async function POST(request: Request) {
       .filter((message: ChatMessage) => message.content.length > 0)
       .slice(-10)
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    if (!apiKey) return Response.json({ error: 'Chưa cấu hình GEMINI_API_KEY trên server.' }, { status: 503 })
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) return Response.json({ error: 'Lỗi Gemini API: GEMINI_API_KEY chưa được cấu hình trên server.' }, { status: 503 })
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [...messages, { role: 'user' as const, content: prompt }].map((message: ChatMessage) => ({
-          role: message.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: message.content }],
-        })),
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1800 },
-      }),
-    })
-    const data = await response.json()
-    if (!response.ok) {
-      console.error('[v0] Gemini server request failed:', response.status, data?.error?.message)
-      return Response.json({ error: 'Gemini không thể xử lý câu hỏi lúc này. Kiểm tra API key, Generative Language API và quota rồi thử lại.' }, { status: 502 })
-    }
-    const text = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('').trim()
-    if (!text) return Response.json({ error: 'Gemini trả về nội dung rỗng. Vui lòng thử lại với câu hỏi cụ thể hơn.' }, { status: 502 })
+    const client = new GoogleGenerativeAI(apiKey)
+    const model = client.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: SYSTEM_PROMPT })
+    const history = messages.slice(0, -1).map((message) => ({ role: message.role === 'assistant' ? 'model' as const : 'user' as const, parts: [{ text: message.content }] }))
+    const chat = model.startChat({ history, generationConfig: { temperature: 0.7, maxOutputTokens: 1800 } })
+    const result = await chat.sendMessage(prompt)
+    const text = result.response.text().trim()
+    if (!text) return Response.json({ error: 'Lỗi Gemini API: Gemini trả về nội dung rỗng.' }, { status: 502 })
     return Response.json({ text, mode: 'gemini' })
+
   } catch (error) {
     console.error('[v0] Gemini chat route failed:', error)
-    return Response.json({ error: 'Không thể kết nối Gemini từ server. Vui lòng thử lại sau.' }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    const normalized = message.toLowerCase()
+    const label = normalized.includes('api key') || normalized.includes('api_key') || normalized.includes('unauthenticated') ? 'Invalid API Key' : normalized.includes('quota') || normalized.includes('resource exhausted') ? 'Quota Exceeded' : message
+    return Response.json({ error: `Lỗi Gemini API: ${label}` }, { status: 502 })
   }
 }
 
