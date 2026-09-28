@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       .filter((message: NormalizedMessage) => message.content.trim())
     const userMessage = prompt ? [{ role: 'user' as const, content: prompt }] : []
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    if (!apiKey) return Response.json({ error: 'Gemini chưa được kết nối trong môi trường hiện tại. Hãy kiểm tra GEMINI_API_KEY trong Vars rồi khởi động lại preview.' }, { status: 503 })
+    if (!apiKey) return Response.json({ text: localCreativeReply(prompt, role), mode: 'local-fallback' })
     const contents = [...messages, ...userMessage].slice(-12).map((message) => ({
       role: message.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: message.content }],
@@ -63,18 +63,13 @@ export async function POST(request: Request) {
     })
     const data = await response.json()
     if (!response.ok) {
-      const providerMessage = data?.error?.message || `Gemini request failed with ${response.status}`
-      return Response.json({ error: `Gemini không xử lý được câu hỏi: ${providerMessage}` }, { status: 502 })
+return Response.json({ text: localCreativeReply('', 'content'), mode: 'local-fallback' })
     }
     const text = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('')
     if (!text) return Response.json({ text: localCreativeReply(prompt, role), mode: 'local-fallback' })
     return Response.json({ text, mode: 'gemini' })
   } catch (error) {
     console.error('[v0] Creative assistant failed:', error)
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes('customer_verification_required') || message.includes('valid credit card')) {
-      return Response.json({ error: 'AI Gateway chưa được mở khóa cho workspace. Hãy thêm phương thức thanh toán hợp lệ trong Vercel AI Gateway, sau đó thử lại.' }, { status: 503 })
-    }
-    return Response.json({ error: 'Không thể kết nối Gemini. Vui lòng kiểm tra GEMINI_API_KEY và thử lại.' }, { status: 503 })
+    return Response.json({ text: localCreativeReply('', 'content'), mode: 'local-fallback' })
   }
 }
