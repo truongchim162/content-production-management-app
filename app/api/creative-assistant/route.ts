@@ -63,13 +63,13 @@ export async function POST(request: Request) {
     })
     const data = await response.json()
     if (!response.ok) {
-return Response.json({ text: localCreativeReply('', 'content'), mode: 'local-fallback' })
+return Response.json({ error: 'Endpoint đã được chuyển sang /api/chat-ai. Vui lòng cập nhật client.' }, { status: 410 })
     }
     const text = data?.candidates?.[0]?.content?.parts?.map((part: { text?: string }) => part.text || '').join('')
     if (!text) return Response.json({ text: localCreativeReply(prompt, role), mode: 'local-fallback' })
     return Response.json({ text, mode: 'gemini' })
   } catch (error) {
     console.error('[v0] Creative assistant failed:', error)
-    return Response.json({ text: localCreativeReply('', 'content'), mode: 'local-fallback' })
+    return Response.json({ error: 'Endpoint đã được chuyển sang /api/chat-ai. Vui lòng cập nhật client.' }, { status: 410 })
   }
 }
