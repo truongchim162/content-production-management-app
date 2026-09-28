@@ -31,8 +31,9 @@ export async function POST(request: Request) {
       .filter((message: ChatMessage) => message.content.length > 0)
       .slice(-10)
 
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) return Response.json({ error: 'Lỗi Gemini API: GEMINI_API_KEY chưa được cấu hình trên server.' }, { status: 503 })
+    const clientApiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : ''
+    const apiKey = clientApiKey || process.env.GEMINI_API_KEY
+    if (!apiKey) return Response.json({ error: 'Vui lòng dán Gemini API Key vào ô cấu hình phía trên để kích hoạt Trợ lý AI.' }, { status: 503 })
 
     const client = new GoogleGenerativeAI(apiKey)
     const model = client.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction: SYSTEM_PROMPT })
