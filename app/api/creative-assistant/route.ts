@@ -6,11 +6,31 @@ const ROLE_PROMPTS = {
 
 function localCreativeReply(prompt: string, role: keyof typeof ROLE_PROMPTS = 'content') {
   const normalized = prompt.toLowerCase()
-  if (role === 'creator') return 'Góc quay: dùng ánh sáng key mềm 45 độ, camera ngang ngực và một shot cận chất liệu.\n\nTransition: whip pan hoặc match cut theo động tác kéo tay áo.\nCaption: “Một item, ba mood. Bạn chọn mood nào?”\nHashtag: #menswear #fitcheck #outfitnam #happyorsad.'
-  if (role === 'lead') return 'Tóm tắt quản lý: ưu tiên duyệt nội dung có hook rõ trong 3 giây đầu, shotlist khả thi và CTA cụ thể.\n\nFeedback mẫu: “Vui lòng rút gọn phần mở đầu, bổ sung cận chất liệu và chốt CTA để tăng khả năng lưu bài.”\nKPI cần theo dõi: tỷ lệ hoàn thành, lượt lưu, tỷ lệ chuyển đổi và số video đúng deadline.'
-  if (normalized.includes('hook') || normalized.includes('câu view')) return 'Hook đề xuất: “Một chiếc quần, ba cách biến hóa để đi làm, đi chơi và đi hẹn hò.”\n\nInsight: Người xem muốn mặc đẹp nhưng cần công thức dễ áp dụng.\nFormat: Mở bằng outfit chưa hoàn chỉnh, chuyển cảnh theo nhịp beat và chốt bằng full look.\nCTA: Lưu lại để thử outfit tiếp theo.'
-  if (normalized.includes('trend') || normalized.includes('tiktok')) return 'Ý tưởng: “1 item — 3 mood phối đồ nam trong 15 giây”.\n\nHook: “Đừng vội bỏ chiếc áo này, bạn đang phối sai cách.”\nShot: Cận chất liệu, toàn thân look 1, chuyển cảnh look 2, detail phụ kiện, hero shot.\nCTA: Comment mood bạn muốn HAPPYORSAD phối tiếp.'
-  return 'Ý tưởng: “Fitcheck nam tối giản nhưng không nhàm chán”.\n\nHook: “Cùng một nền outfit, đổi đúng một chi tiết là khác hẳn.”\nInsight: Tập trung vào cách nâng cấp outfit bằng phom dáng, layer và phụ kiện.\nFormat: Video dọc 9:16, 5 shot, nhịp cắt nhanh 1–2 giây mỗi shot.\nCTA: Lưu video và gửi cho người cần nâng cấp tủ đồ.'
+  const seed = [...normalized].reduce((total, char) => total + char.charCodeAt(0), 0)
+  const pick = <T,>(items: T[]) => items[seed % items.length]
+  if (role === 'creator') {
+    if (normalized.includes('caption') || normalized.includes('hashtag')) return pick([
+      'Caption: “Không cần mặc cầu kỳ, chỉ cần đúng phom.”\n\nHashtag: #menswear #fitcheck #outfitnam #minimalstyle #happyorsad\n\nGợi ý: mở caption bằng một câu hỏi để kéo bình luận: “Bạn chọn look A hay B?”',
+      'Caption: “Một chiếc áo, ba cách mặc cho cả tuần.”\n\nHashtag: #phoidonam #mensfashion #stylingtips #ootd\n\nCTA: Lưu lại và tag người bạn hay nói “không có gì để mặc”.',
+    ])
+    if (normalized.includes('góc') || normalized.includes('ánh sáng') || normalized.includes('quay')) return pick([
+      'Setup quay: đặt máy ngang ngực, cách mẫu 1.5m; dùng key light 45° và một nguồn sáng hắt nhẹ phía sau. Quay 4 shot: toàn thân, medium, cận chất liệu và detail phụ kiện.',
+      'Setup quay indoor: khóa exposure, 24–30fps, shutter 1/50–1/60. Dùng tripod cho hero shot, handheld nhẹ cho shot chuyển outfit. Tránh để nền sáng hơn chủ thể.',
+    ])
+    return pick([
+      'Shotlist đề xuất: 1) cận tay kéo khóa quần, 2) toàn thân outfit cơ bản, 3) match cut khi xoay người, 4) cận chất liệu, 5) hero shot kèm CTA. Transition chính: whip pan.',
+      'Kịch bản quay 15 giây: 0–2s nêu vấn đề “Mặc basic sao cho không nhạt?”, 2–8s thay 3 layer, 8–12s cận phụ kiện, 12–15s full look và CTA lưu video.',
+    ])
+  }
+  if (role === 'lead') {
+    if (normalized.includes('kpi') || normalized.includes('hiệu suất')) return 'Khung đọc KPI tuần: (1) tỷ lệ hoàn thành đúng deadline, (2) lượt xem 3 giây đầu, (3) tỷ lệ xem hết, (4) lượt lưu/chia sẻ, (5) tỷ lệ chuyển đổi.\n\nHành động: chọn 2 video tốt nhất để nhân bản hook và 2 video rớt retention để sửa phần mở đầu.'
+    if (normalized.includes('feedback') || normalized.includes('sửa')) return 'Feedback mẫu: “Hook hiện chưa nói rõ lợi ích trong 3 giây đầu. Vui lòng rút phần intro, thêm cận chất liệu ở giây 4–6 và chốt CTA cụ thể. Bản sửa cần giữ nhịp cắt nhanh hơn ở đoạn giữa.”'
+    return pick(['Đề xuất tuần này: ưu tiên series “1 item – 3 cách mặc”, chia thành 3 tập theo dịp sử dụng. Content phụ trách hook và script; Creator quay cùng một setup để giảm thời gian; Lead theo dõi retention và lượt lưu.', 'Bảng ưu tiên: P1 là video đang chờ duyệt hoặc gần deadline; P2 là content đã duyệt nhưng chưa có source; P3 là ý tưởng mới. Mỗi task cần một owner, deadline và tiêu chí nghiệm thu rõ ràng.'])
+  }
+  if (normalized.includes('hook') || normalized.includes('câu view')) return pick(['Hook: “Bạn đang mặc chiếc quần này sai cách mà không biết.”\n\nInsight: đánh vào lỗi phối đồ quen thuộc, sau đó cho 3 cách sửa.\nCTA: Lưu lại để thử outfit cuối tuần.', 'Hook: “Đừng mua thêm quần áo trước khi xem 3 công thức này.”\n\nFormat: before/after, mỗi look 4 giây; chốt bằng bảng màu và phụ kiện tương ứng.'])
+  if (normalized.includes('trend') || normalized.includes('tiktok')) return pick(['Trend idea: “POV: stylist chọn outfit cho 3 cuộc hẹn trong một ngày”. Chia 3 mood: đi làm, cafe, dinner; dùng cùng một item làm điểm nối.', 'Trend idea: “Blind pick outfit”: bốc ngẫu nhiên màu áo, quần và phụ kiện rồi phối trong 20 giây. Có thể mở rộng thành series để kéo comment.'])
+  if (normalized.includes('outfit') || normalized.includes('phối')) return 'Công thức phối: áo thun trơn + trousers phom đứng + sneaker cùng tông. Thêm một lớp overshirt để tạo chiều sâu; phụ kiện chỉ nên có 1 điểm nhấn. Quay cùng một góc để người xem thấy rõ sự khác biệt trước/sau.'
+  return pick(['Ý tưởng: “Một item, ba hoàn cảnh”. Hook bằng một outfit cơ bản, sau đó biến đổi bằng layer và phụ kiện. Shotlist gồm toàn thân, cận chi tiết, chuyển cảnh và hero shot; CTA là “Bạn chọn look nào?”', 'Ý tưởng: “Tủ đồ nam capsule trong 5 món”. Mỗi món xuất hiện cùng 2 cách phối, màu sắc trung tính và nhịp dựng rõ. Cuối video thêm checklist để tăng lượt lưu.'])
 }
 
 export async function POST(request: Request) {
