@@ -203,6 +203,7 @@ const statusLabels: Record<Status, string> = {
   approved_idea: "Đã duyệt ý tưởng",
   needs_revision: "Cần chỉnh sửa",
   video_needs_revision: "Video cần sửa",
+  video_resubmission: "Nộp lại video",
   script_pending: "Chờ duyệt kịch bản",
   script_pending_creator: "Creator chờ duyệt kịch bản",
   script_approved: "Kịch bản đã duyệt",
@@ -849,7 +850,7 @@ function Workspace({
           "Duyệt video",
           "Kho lưu trữ",
           "Viết kịch bản chi tiết",
-          "Lịch quay",
+          "Lịch quay & dựng",
           "Sân dựng video",
           "Cấu hình hệ thống",
           "Quản lý nhân sự",
@@ -995,7 +996,7 @@ function Workspace({
             />
           ) : role === "creator" ||
             (role === "lead" &&
-              ["Lịch quay", "Sân dựng video"].includes(view)) ? (
+              ["Lịch quay & dựng", "Sân dựng video"].includes(view)) ? (
             <CreatorWorkspace user={user} view={view} onViewChange={setView} />
           ) : (
             <LeadWorkspace user={user} view={view} openItemId={openItemId} />
@@ -4133,7 +4134,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
         </button>
         <section
-          aria-label="Dọn dẹp dữ liệu test"
+          aria-label="Dọn d���p dữ liệu test"
           className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
         >
           <div className="flex items-start gap-3">
