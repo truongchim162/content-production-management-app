@@ -147,7 +147,6 @@ type Item = {
   editNote?: string;
   sourceLink?: string;
   shootNote?: string;
-  shootChecklist?: { location: boolean; outfit: boolean; props: boolean };
   scheduledAt?: string;
   scheduledPublishDate?: string;
   wasOverdue?: boolean;
@@ -159,8 +158,6 @@ type Item = {
   scriptFeedback?: string;
   videoFeedback?: string;
   publishedLink?: string;
-  views?: number;
-  likes?: number;
   publishedAt?: unknown;
   feedback?: string;
   feedbackUnread?: number;
@@ -223,30 +220,6 @@ const notifyUser = async (
     isRead: false,
     createdAt: serverTimestamp(),
   });
-const stageBadgeMeta: Record<string, { label: string; icon: string; tone: string; step: number }> = {
-  idea_pending: { label: "1. Ý tưởng chờ duyệt", icon: "●", tone: "bg-amber-100 text-amber-800", step: 1 },
-  approved_idea: { label: "2. Đã duyệt YT / Đang viết KB", icon: "✎", tone: "bg-sky-100 text-sky-800", step: 2 },
-  scripting: { label: "2. Đã duyệt YT / Đang viết KB", icon: "✎", tone: "bg-sky-100 text-sky-800", step: 2 },
-  script_review_creator: { label: "3. KB chờ Creator duyệt", icon: "▤", tone: "bg-violet-100 text-violet-800", step: 3 },
-  waiting_production: { label: "4. Chờ quay & dựng", icon: "●", tone: "bg-indigo-100 text-indigo-800", step: 4 },
-  shooting_pending: { label: "4. Chờ quay & dựng", icon: "●", tone: "bg-indigo-100 text-indigo-800", step: 4 },
-  video_pending_lead: { label: "5. Video chờ Lead duyệt", icon: "▣", tone: "bg-blue-100 text-blue-800", step: 5 },
-  ready_to_publish: { label: "6. Bài sẵn sàng đăng", icon: "↗", tone: "bg-emerald-100 text-emerald-800", step: 6 },
-  ready_to_post: { label: "6. Bài sẵn sàng đăng", icon: "↗", tone: "bg-emerald-100 text-emerald-800", step: 6 },
-  published: { label: "7. Bài đã đăng", icon: "●", tone: "bg-purple-100 text-purple-800", step: 7 },
-  idea_rejected: { label: "Cần sửa Ý tưởng", icon: "●", tone: "bg-orange-100 text-orange-800", step: 1 },
-  idea_needs_revision: { label: "Cần sửa Ý tưởng", icon: "●", tone: "bg-orange-100 text-orange-800", step: 1 },
-  script_rejected: { label: "Cần sửa Kịch bản", icon: "●", tone: "bg-orange-100 text-orange-800", step: 3 },
-  needs_revision: { label: "Cần sửa Kịch bản", icon: "●", tone: "bg-orange-100 text-orange-800", step: 3 },
-  video_rejected: { label: "Cần sửa Video", icon: "●", tone: "bg-red-100 text-red-800", step: 5 },
-  video_needs_revision: { label: "Cần sửa Video", icon: "●", tone: "bg-red-100 text-red-800", step: 5 },
-};
-
-function StageProgress({ status }: { status: string }) {
-  const meta = stageBadgeMeta[status] || { label: statusLabels[status as Status] || status, icon: "●", tone: "bg-muted text-muted-foreground", step: 1 };
-  return <div className="mt-2 grid gap-2"><span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.tone}`}><span aria-hidden="true">{meta.icon}</span>{meta.label}</span><div className="flex items-center gap-1" aria-label={`Tiến độ ${meta.step} trên 8`} role="progressbar" aria-valuemin={1} aria-valuemax={8} aria-valuenow={meta.step}>{Array.from({ length: 8 }, (_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full transition-colors ${index + 1 < meta.step ? "bg-zinc-900 dark:bg-zinc-100" : index + 1 === meta.step ? "animate-pulse bg-orange-500" : "bg-zinc-200 dark:bg-zinc-700"}`} />)}</div></div>;
-}
-
 const statusLabels: Record<Status, string> = {
   idea_pending: "Ý tưởng chờ duyệt",
   script_review_creator: "Kịch bản chờ Creator duyệt",
@@ -740,10 +713,8 @@ function RoleDrawer({
           ["Bài sẵn sàng đăng", Send, "Bài sẵn sàng đăng"],
           ["Bài đã đăng", CheckSquare, "Bài đã đăng"],
           ["Trễ deadline", AlertCircle, "Trễ deadline"],
-  ["Kho lưu trữ", Archive, "Kho lưu trữ"],
-  ["Quản lý Thùng Rác", Trash2, "Quản lý Thùng Rác"],
-  ["Báo cáo & Hiệu suất KPI", BarChart3, "Báo cáo & Hiệu suất KPI"],
-  ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
+          ["Kho lưu trữ", Archive, "Kho lưu trữ"],
+          ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
           [
             "Cấu hình hệ thống",
             Settings,
@@ -1007,12 +978,12 @@ function Workspace({
             </span>
           </button>
           {profileOpen && (
-<ProfileModal
-  user={user}
-  role={role}
-  onClose={() => setProfileOpen(false)}
-  onLogout={onLogout}
-  />
+            <ProfileMenu
+              user={user}
+              role={role}
+              onLogout={onLogout}
+              onClose={() => setProfileOpen(false)}
+            />
           )}
         </div>
       </header>
@@ -1084,16 +1055,70 @@ function Workspace({
   );
 }
 
+function ProfileMenu({
+  user,
+  role,
+  onLogout,
+  onClose,
+}: {
+  user: User;
+  role: UserRole;
+  onLogout: () => void;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  return (
+    <>
+      {
+        <div className="absolute right-0 top-12 z-30 w-56 rounded-xl border border-border bg-card p-2 shadow-lg">
+          <button
+            onClick={() => setOpen(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"
+          >
+            <UserRound
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span>
+              <b>Trang cá nhân</b>
+              <small className="mt-0.5 block text-muted-foreground">
+                {user.email}
+              </small>
+            </span>
+          </button>
+          <button
+            onClick={() => setConfirmLogout(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="size-4" />
+            Đăng xuất
+          </button>
+        </div>
+      }
+      <ConfirmDialogModal open={confirmLogout} title="Đăng xuất tài khoản?" description="Bạn sẽ được đưa về màn hình đăng nhập." confirmLabel="Đăng xuất" destructive onCancel={() => setConfirmLogout(false)} onConfirm={() => { setConfirmLogout(false); onLogout(); }} />
+      {open && (
+        <ProfileModal
+          user={user}
+          role={role}
+          onClose={() => {
+            setOpen(false);
+            onClose();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 function ProfileModal({
   user,
   role,
   onClose,
-  onLogout,
 }: {
   user: User;
   role: UserRole;
   onClose: () => void;
-  onLogout: () => void;
 }) {
   const [tab, setTab] = useState<"profile" | "password">("profile");
   const [name, setName] = useState(user.displayName || "");
@@ -1125,7 +1150,7 @@ function ProfileModal({
       );
       setMessage("Đã lưu thông tin cá nhân.");
     } catch {
-      setError("Không thể cập nhật hồ sơ. Vui lòng thử lại.");
+      setError("Không thể c��p nhật hồ sơ. Vui lòng thử lại.");
     } finally {
       setBusy(false);
     }
@@ -1191,7 +1216,7 @@ function ProfileModal({
             onClick={() => setTab("password")}
             className={`flex-1 rounded-md py-2 text-xs ${tab === "password" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
           >
-            Đổi mật khẩu
+            Đổi m��t kh��u
           </button>
         </div>
         {message && (
@@ -1297,11 +1322,6 @@ function ProfileModal({
             </button>
           </div>
         )}
-        <div className="mt-6 border-t border-border pt-4">
-          <button type="button" onClick={() => { onClose(); onLogout(); }} className="w-full rounded-lg border border-destructive/30 px-4 py-2.5 text-left text-xs font-semibold text-destructive hover:bg-destructive/10">
-            Đăng xuất
-          </button>
-        </div>
       </section>
     </div>
   );
@@ -1358,7 +1378,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
       setError(
         e?.code === "auth/email-already-in-use"
           ? "Email này đã tồn tại trong Firebase Authentication."
-          : `Không thể tạo tài khoản (${e?.code ?? "unknown"}).`,
+          : `Kh��ng thể tạo tài khoản (${e?.code ?? "unknown"}).`,
       );
     } finally {
       setBusy(false);
@@ -1514,7 +1534,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
                   placeholder="Nguyễn Văn A"
                 />
                 <Field
-                  label="Email đ��ng nh��p"
+                  label="Email đăng nhập"
                   value={form.email}
                   onChange={(value) => setForm({ ...form, email: value })}
                   placeholder="content2@happyorsad.vn"
@@ -1592,7 +1612,9 @@ function ContentWorkspace({
     title?: string;
     description?: string;
   }>();
-  const [contentFilter, setContentFilter] = useState<"all" | "pending" | "scripting" | "creator" | "archived">("all");
+  const [contentFilter, setContentFilter] = useState<
+    "all" | "pending" | "approved" | "scripting" | "archived"
+  >("all");
   useEffect(() => {
     const source = canManageAll
       ? collection(db, "contentItems")
@@ -1642,11 +1664,27 @@ function ContentWorkspace({
   };
   const contentStats = useMemo(
     () => ({
-  all: items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status)).length,
-  pending: items.filter((i) => i.status === "idea_pending").length,
-  scripting: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
-  creator: items.filter((i) => i.status === "script_review_creator").length,
-  archived: items.filter((i) => i.status === "published").length,
+      all: items.filter((i) => i.status !== "rejected").length,
+      pending: items.filter((i) =>
+        ["idea_pending", "idea_needs_revision"].includes(i.status),
+      ).length,
+      approved: items.filter((i) =>
+        [
+          "approved_idea",
+          "script_pending",
+          "script_pending_creator",
+          "script_approved",
+          "scripting",
+          "shooting_pending",
+          "shooting_done",
+          "editing_done",
+          "published",
+        ].includes(i.status),
+      ).length,
+      scripting: items.filter((i) =>
+        ["scripting", "approved_idea"].includes(i.status),
+      ).length,
+      archived: items.filter((i) => i.status === "archived").length,
     }),
     [items],
   );
@@ -1654,21 +1692,51 @@ function ContentWorkspace({
     const isArchiveView =
       view === "Kho Lưu Trữ" || contentFilter === "archived";
     const base = isArchiveView
-      ? items.filter((i) => ["archived", "ready_to_publish", "published"].includes(i.status))
-      : items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status));
+      ? items.filter((i) => i.status === "archived")
+      : items.filter((i) =>
+          [
+            "idea_pending",
+            "idea_needs_revision",
+            "pending_approval",
+            "approved_idea",
+            "script_pending",
+            "script_approved",
+            "scripting",
+            "shooting_pending",
+            "shooting_done",
+            "editing_done",
+            "published",
+          ].includes(i.status),
+        );
     const filtered =
-  contentFilter === "all" || contentFilter === "archived"
-  ? base
-  : contentFilter === "pending"
-  ? base.filter((i) => i.status === "idea_pending")
-  : contentFilter === "scripting"
-  ? base.filter((i) => ["scripting", "script_rejected"].includes(i.status))
-  : base.filter((i) => i.status === "script_review_creator");
-    return [...filtered].sort((a, b) => {
-      const rejectedPriority = (status: Status) => status === "script_rejected" ? 0 : 1;
-      return rejectedPriority(a.status) - rejectedPriority(b.status) ||
-        ((itemTime(b.approvedAt) || itemTime(b.createdAt)) - (itemTime(a.approvedAt) || itemTime(a.createdAt)));
-    });
+      contentFilter === "all" || contentFilter === "archived"
+        ? base
+        : contentFilter === "pending"
+          ? base.filter((i) =>
+              ["idea_pending", "idea_needs_revision"].includes(i.status),
+            )
+          : contentFilter === "approved"
+            ? base.filter((i) =>
+                [
+                  "approved_idea",
+                  "script_pending",
+                  "script_pending_creator",
+                  "script_approved",
+                  "scripting",
+                  "shooting_pending",
+                  "shooting_done",
+                  "editing_done",
+                  "published",
+                ].includes(i.status),
+              )
+            : base.filter((i) =>
+                ["scripting", "approved_idea"].includes(i.status),
+              );
+    return [...filtered].sort(
+      (a, b) =>
+        (itemTime(b.approvedAt) || itemTime(b.createdAt)) -
+        (itemTime(a.approvedAt) || itemTime(a.createdAt)),
+    );
   }, [items, view, contentFilter]);
   const createIdea = async (data: Omit<Item, "id" | "status">) => {
     setSaving(true);
@@ -1784,10 +1852,26 @@ function ContentWorkspace({
       await deleteDoc(doc(db, "contentItems", item.id));
   };
   const statCards = [
-  { key: "pending" as const, label: "CHỜ LEAD DUYỆT YT", value: contentStats.pending },
-  { key: "scripting" as const, label: "CẦN VIẾT / SỬA KỊCH BẢN", value: contentStats.scripting },
-  { key: "creator" as const, label: "KỊCH BẢN CHỜ CREATOR DUYỆT", value: contentStats.creator },
-  { key: "archived" as const, label: "CHUYỂN ĐỔI THÀNH BÀI ĐĂNG", value: contentStats.archived },
+    {
+      key: "pending" as const,
+      label: "Chờ duyệt",
+      value: contentStats.pending,
+    },
+    {
+      key: "approved" as const,
+      label: "Tổng ý tưởng được duyệt",
+      value: contentStats.approved,
+    },
+    {
+      key: "scripting" as const,
+      label: "Chờ lên kịch bản",
+      value: contentStats.scripting,
+    },
+    {
+      key: "archived" as const,
+      label: "Kho lưu trữ",
+      value: contentStats.archived,
+    },
   ];
   const formatDate = (value: unknown) => {
     const timestamp = itemTime(value);
@@ -1903,9 +1987,8 @@ function ContentWorkspace({
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${item.status === "idea_rejected" || item.status === "idea_needs_revision" ? "bg-amber-100 text-amber-800" : item.status === "script_rejected" || item.status === "needs_revision" ? "bg-orange-100 text-orange-800" : item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-50 text-orange-600"}`}>
                       {statusLabels[item.status]}
                     </span>
-<h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-  <StageProgress status={item.status} />
-  <p className="mt-1 text-xs text-muted-foreground">
+                    <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {item.description || "Chưa có mô tả."}
                     </p>
                     {["idea_rejected", "idea_needs_revision", "script_rejected", "needs_revision", "video_rejected", "video_needs_revision"].includes(item.status) && (item.ideaFeedback || item.scriptFeedback || item.videoFeedback || item.feedback) && (
@@ -1966,7 +2049,7 @@ function ContentWorkspace({
             ))
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              Chưa có nội dung ở trạng thái này.
+              Chưa có nội dung �� trạng thái này.
             </div>
           )}
         </div>
@@ -2022,7 +2105,7 @@ function StageDetailEditor({
   onDelete: () => void;
 }) {
   const canDelete = role === "lead" || (role === "content" && item.status === "idea_pending");
-  const canEdit = (role === "content" && ["idea_pending", "scripting", "script_rejected"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && ["video_pending_lead", "ready_to_publish", "published"].includes(item.status));
+  const canEdit = (role === "content" && ["idea_pending", "scripting"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && item.status === "video_pending_lead");
   const canCommentScript = role === "lead" && item.status === "script_review_creator";
   const readOnly = !canEdit;
   const [draft, setDraft] = useState({
@@ -2035,11 +2118,6 @@ function StageDetailEditor({
     scheduledAt: item.scheduledAt || "",
     finalVideoLink: item.finalVideoLink || "",
     publishedLink: item.publishedLink || "",
-    caption: item.caption || "",
-    hashtags: (item as Item & { hashtags?: string }).hashtags || "",
-    scheduledPublishDate: item.scheduledPublishDate || item.scheduledAt || "",
-    views: String(item.views || ""),
-    likes: String(item.likes || ""),
     leadNote: item.leadNote || item.feedback || "",
   });
   const [showReschedule, setShowReschedule] = useState(false);
@@ -2080,10 +2158,10 @@ function StageDetailEditor({
       {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngoại cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isVideoRevision && <div className="grid gap-4"><p className="text-sm font-semibold">Nộp lại bản dựng video</p>{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <SmartVideoPreview url={item.finalVideoLink} />}<label data-feedback-form className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
-      {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">{role === "lead" ? "Lead Override · Chỉnh sửa nhanh" : "Kiểm tra bắt buộc trước khi đăng"}</p>{role === "lead" && <div className="grid gap-4 sm:grid-cols-2">{field("Caption", "caption", "Nhập caption")}{field("Hashtag", "hashtags", "#hashtag")}</div>}{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledPublishDate", "YYYY-MM-DD HH:mm")}{role !== "lead" && field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
+      {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
       {(item.feedbackHistory?.length || item.history?.length) ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.feedbackHistory?.map((entry, index) => <div key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><div className="flex items-center justify-between gap-2"><strong>{entry.author}</strong><span className="text-muted-foreground">{entry.stage === "idea" ? "Ý tưởng" : entry.stage === "script" ? "Kịch bản" : "Video"} · {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(entry.createdAt))}</span></div><p className="mt-1 whitespace-pre-wrap">{entry.content}</p></div>)}{item.history?.filter((entry) => entry.note).map((entry, index) => <p key={`legacy-${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
-    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => setConfirmDelete(true)} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{item.status === "published" && role === "lead" && <button type="button" onClick={() => save({ views: Number(draft.views) || 0, likes: Number(draft.likes) || 0 })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu KPI</button>}{isPublish && role === "lead" && <button type="button" onClick={() => save({ caption: draft.caption, hashtags: draft.hashtags, scheduledPublishDate: draft.scheduledPublishDate, scheduledAt: draft.scheduledPublishDate })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu Override</button>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nh���t & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer><ConfirmDialogModal open={confirmDelete} title="Xóa bài viết?" description="Thao tác này không thể hoàn tác." confirmLabel="Xóa bài viết" destructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onDelete(); }} /><ConfirmDialogModal open={Boolean(dialogMessage)} title="Không thể thực hiện" description={dialogMessage} confirmLabel="Đã hiểu" onCancel={() => setDialogMessage("")} onConfirm={() => setDialogMessage("")} />{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
+    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => setConfirmDelete(true)} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer><ConfirmDialogModal open={confirmDelete} title="Xóa bài viết?" description="Thao tác này không thể hoàn tác." confirmLabel="Xóa bài viết" destructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onDelete(); }} /><ConfirmDialogModal open={Boolean(dialogMessage)} title="Không thể thực hiện" description={dialogMessage} confirmLabel="Đã hiểu" onCancel={() => setDialogMessage("")} onConfirm={() => setDialogMessage("")} />{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
 }
 
 function IdeaVault({
@@ -2175,7 +2253,7 @@ function IdeaVault({
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea phù hợp.</div>
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea ph�� hợp.</div>
       )}
     </section>
   );
@@ -2185,7 +2263,7 @@ type VideoKind = "ref" | "source" | "final" | "published";
 const videoKinds: Record<VideoKind, { icon: string; label: string }> = {
   ref: { icon: "📌", label: "VIDEO THAM KHẢO (REF)" },
   source: { icon: "🎬", label: "VIDEO SOURCE DỰNG (FILE GỐC)" },
-  final: { icon: "✂️", label: "VIDEO BẢN DỰNG HOÀN CHỈNH" },
+  final: { icon: "✂️", label: "VIDEO B���N DỰNG HOÀN CHỈNH" },
   published: { icon: "🚀", label: "VIDEO BÀI ĐĂNG THỰC TẾ" },
 };
 const isVideoUrl = (value?: string) =>
@@ -2377,7 +2455,7 @@ function CreativeAssistant({
     lead: {
       title: "AI Cố Vấn Chiến Lược & Quản Lý",
       quick: [
-        "Phân tích hiệu suất tuần",
+        "Phân tích hiệu su��t tu��n",
         "Viết nhận xét yêu cầu sửa bài",
         "Đề xuất chiến lược tháng tới",
         "Đánh giá KPI team",
@@ -2720,7 +2798,6 @@ function IdeaRevisionEditor({
           <div>
             <p className="text-xs text-orange-600">Ý tưởng cần chỉnh sửa</p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
-  <StageProgress status={item.status} />
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng">
             <X className="size-4" />
@@ -2835,7 +2912,7 @@ function ScriptEditor({
         no: 2,
         shot: "Cận chất liệu và chi tiết phụ kiện",
         angle: "Close-up chuyển động",
-        voice: "Điểm nhấn nằm ở chất liệu và phom dáng.",
+        voice: "Điểm nhấn n���m ở chất liệu và phom dáng.",
         text: "DETAILS MATTER",
       },
       {
@@ -2855,10 +2932,9 @@ function ScriptEditor({
               {statusLabels[item.status]}
             </p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
-  <StageProgress status={item.status} />
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
-                <strong>Feedback từ Lead:</strong>
+                <strong>Feedback t��� Lead:</strong>
                 <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
               </div>
             )}
@@ -2894,7 +2970,7 @@ function ScriptEditor({
             className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700"
           >
             <Sparkles className="size-4" />
-            AI gợi ý kịch bản
+            AI gợi ý kịch b��n
           </button>
         </div>
         <div className="mt-3 flex flex-col gap-3">
@@ -3070,10 +3146,14 @@ function CreatorWorkspace({
   const [items, setItems] = useState<Item[]>(
     demoItems.filter((item) =>
       [
-        "script_review_creator",
-        "waiting_production",
-        "video_rejected",
-        "ready_to_publish",
+        "script_pending_creator",
+        "script_approved",
+        "shooting_pending",
+        "shooting_done",
+        "editing_done",
+        "video_pending",
+        "video_needs_revision",
+        "ready_to_post",
         "published",
       ].includes(item.status),
     ),
@@ -3110,10 +3190,11 @@ function CreatorWorkspace({
                 !["archived", "rejected"].includes(item.status) &&
                 (item.ownerId === user.uid ||
                   [
-                    "script_review_creator",
-                    "waiting_production",
-                    "video_rejected",
-                    "ready_to_publish",
+                    "script_pending_creator",
+                    "script_approved",
+                    "video_pending",
+                    "video_needs_revision",
+                    "ready_to_post",
                     "published",
                   ].includes(item.status)),
             ),
@@ -3127,10 +3208,10 @@ function CreatorWorkspace({
     const nextPatch =
       patch.status === "published"
         ? { ...patch, status: "published" as Status }
-        : patch.status === "video_pending_lead"
+        : patch.status === "video_pending"
           ? { ...patch, status: "video_pending" as Status }
-          : item.status === "script_review_creator" &&
-              patch.status === "waiting_production"
+          : item.status === "script_pending_creator" &&
+              patch.status === "script_approved"
             ? patch
             : { ...patch, status: item.status };
     setItems((all) =>
@@ -3228,31 +3309,30 @@ function CreatorWorkspace({
   });
   const allCreatorItems = items.filter((item) =>
     [
-      "script_review_creator",
-      "waiting_production",
-      "video_pending_lead",
+      "script_pending_creator",
+      "script_approved",
+      "shooting_pending",
+      "shooting_done",
+      "editing_done",
+      "video_pending",
+      "needs_revision",
+      "script_rejected",
       "video_rejected",
-      "ready_to_publish",
-      "published",
+      "ready_to_post",
     ].includes(item.status),
   );
-  const creatorPriority = (item: Item) => ["script_review_creator", "video_rejected", "script_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
-  useEffect(() => {
-    if (!creatorFilter) return;
-    const timer = window.setTimeout(() => document.querySelector("[data-creator-results]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
-    return () => window.clearTimeout(timer);
-  }, [creatorFilter]);
+  const creatorPriority = (item: Item) => ["script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
   const visible =
     creatorFilter === "script"
-      ? items.filter((item) => item.status === "script_review_creator")
+      ? items.filter((item) => item.status === "script_pending_creator")
       : creatorFilter === "shoot"
-        ? items.filter((item) => item.status === "waiting_production")
+        ? items.filter((item) => item.status === "script_approved")
         : creatorFilter === "video"
-          ? items.filter((item) => item.status === "video_pending_lead")
+          ? items.filter((item) => item.status === "video_pending")
           : creatorFilter === "revision"
-            ? items.filter((item) => item.status === "video_rejected")
+            ? items.filter((item) => item.status === "video_needs_revision")
             : creatorFilter === "ready"
-              ? items.filter((item) => item.status === "ready_to_publish" )
+              ? items.filter((item) => item.status === "ready_to_post")
               : creatorFilter === "published"
                 ? filteredPublishedItems
                 : creatorFilter === "overdue"
@@ -3264,7 +3344,7 @@ function CreatorWorkspace({
                     )
                   : view === "Cần Feedback / Sửa Video"
                     ? items.filter(
-                        (item) => item.status === "video_rejected",
+                        (item) => item.status === "video_needs_revision",
                       )
                     : view === "Danh sách bài đăng"
                       ? filteredPublishedItems
@@ -3322,33 +3402,33 @@ function CreatorWorkspace({
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
         {[
           [
-            "Kịch bản chờ duyệt",
+            "Kịch b��n chờ duyệt",
             "script",
-            items.filter((i) => i.status === "script_review_creator"),
+            items.filter((i) => i.status === "script_pending_creator"),
             FileText,
           ],
           [
             "Bài chờ quay / dựng",
             "shoot",
-            items.filter((i) => i.status === "waiting_production"),
+            items.filter((i) => i.status === "script_approved"),
             Film,
           ],
           [
             "Video chờ Lead duyệt",
             "video",
-            items.filter((i) => i.status === "video_pending_lead"),
+            items.filter((i) => i.status === "video_pending"),
             Send,
           ],
           [
-            "Cần sửa theo Feedback",
+            "Cần s��a theo Feedback",
             "revision",
-            items.filter((i) => i.status === "video_rejected"),
+            items.filter((i) => i.status === "needs_revision"),
             AlertTriangle,
           ],
           [
             "Video đã duyệt / sẵn sàng đăng",
             "ready",
-            items.filter((i) => i.status === "ready_to_publish"),
+            items.filter((i) => i.status === "ready_to_post"),
             Check,
           ],
           [
@@ -3383,8 +3463,7 @@ function CreatorWorkspace({
           </button>
         ))}
       </div>
-      <div data-creator-results>
-      {view === "Lịch quay & dựng" ? <CreatorProductionDay items={visible} onOpen={(item) => setSelected(item)} /> : view === "Danh sách bài đăng" ? (
+      {view === "Danh sách bài đăng" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {publishedItems.length ? (
             publishedItems.map((item) => (
@@ -3413,10 +3492,10 @@ function CreatorWorkspace({
                     </span>
                   ))}
                   <p className="w-full text-xs text-muted-foreground">
-                    Đăng dự kiến:{" "}
+                    Đ��ng dự kiến:{" "}
                     {item.scheduledAt
                       ? new Date(item.scheduledAt).toLocaleString("vi-VN")
-                      : "Chưa cập nhật"}
+                      : "���"}
                   </p>
                 </div>
                 <div>
@@ -3462,20 +3541,8 @@ function CreatorWorkspace({
           onSave={(patch) => update(selected, patch)}
         />
       )}
-      </div>
     </>
   );
-}
-
-function CreatorProductionDay({ items, onOpen }: { items: Item[]; onOpen: (item: Item) => void }) {
-  const today = new Date();
-  const isToday = (item: Item) => { const value = item.scheduledAt || item.scheduledPublishDate; if (!value) return false; const date = new Date(value); return date.toDateString() === today.toDateString(); };
-  const groups = [
-    { label: "Cần quay hôm nay", icon: Film, statuses: ["script_review_creator", "waiting_production"] },
-    { label: "Cần dựng hôm nay", icon: Clapperboard, statuses: ["waiting_production", "video_rejected"] },
-    { label: "Cần đăng hôm nay", icon: Send, statuses: ["ready_to_publish"] },
-  ];
-  return <div className="grid gap-4">{groups.map(({ label, icon: Icon, statuses }) => { const list = items.filter((item) => statuses.includes(item.status) && (isToday(item) || !item.scheduledAt)); return <section key={label} className="rounded-2xl border border-border bg-card p-4"><div className="flex items-center gap-2"><Icon className="size-4 text-orange-500" /><h2 className="text-sm font-semibold">{label}</h2><span className="ml-auto rounded-full bg-muted px-2 py-1 text-xs">{list.length}</span></div><div className="mt-3 grid gap-2">{list.length ? list.map((item) => <button key={item.id} type="button" onClick={() => onOpen(item)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted"><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.title}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{item.location || "Chưa có bối cảnh"} · {item.outfit || "Chưa có outfit"}</span></span><Link2 className="size-4 shrink-0 text-muted-foreground" /></button>) : <p className="py-4 text-center text-xs text-muted-foreground">Không có công việc hôm nay.</p>}</div></section>; })}</div>;
 }
 
 function ItemMetadata({ item }: { item: Item }) {
@@ -3595,7 +3662,6 @@ function CreatorEditor({
   const [draft, setDraft] = useState(item);
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
-  const [checklist, setChecklist] = useState(item.shootChecklist || { location: false, outfit: false, props: false });
   const [publishErrors, setPublishErrors] = useState({
     scheduledAt: false,
     finalVideoLink: false,
@@ -3639,11 +3705,6 @@ function CreatorEditor({
       scheduledAt: !draft.scheduledAt?.trim(),
       finalVideoLink: !draft.finalVideoLink?.trim(),
     };
-    const publishUrl = draft.publishedLink?.trim() || "";
-    if (!/^https?:\/\/(www\.)?(tiktok\.com|instagram\.com|instagr\.am)\//i.test(publishUrl)) {
-      showToast("Vui lòng dán link TikTok hoặc Instagram Reels hợp lệ.", true);
-      return;
-    }
     if (errors.scheduledAt || errors.finalVideoLink) {
       setPublishErrors(errors);
       showToast(
@@ -3666,7 +3727,6 @@ function CreatorEditor({
               {statusLabels[item.status]}
             </p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
-  <StageProgress status={item.status} />
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
                 <strong>Feedback từ Lead:</strong>
@@ -3678,7 +3738,6 @@ function CreatorEditor({
             <X className="size-4" />
           </button>
         </div>
-        {(item.status === "shooting_pending" || item.status === "script_approved") && <fieldset className="mb-4 rounded-xl border border-orange-200 bg-orange-50/70 p-3"><legend className="px-1 text-xs font-semibold text-orange-900">Shooting checklist</legend><div className="mt-2 grid grid-cols-3 gap-2">{([ ["location", "Bối cảnh"], ["outfit", "Outfit"], ["props", "Đạo cụ"] ] as const).map(([key, label]) => <label key={key} className="flex min-h-11 items-center gap-2 rounded-lg border border-orange-200 bg-white px-2 text-xs font-medium text-zinc-800"><input type="checkbox" checked={checklist[key]} onChange={(event) => { const next = { ...checklist, [key]: event.target.checked }; setChecklist(next); onSave({ shootChecklist: next }); }} className="size-4 accent-orange-500" />{label}</label>)}</div></fieldset>}
         <div className="grid gap-4 sm:grid-cols-2">
           <CreatorInput
             label="Bối cảnh"
@@ -3812,8 +3871,6 @@ function CreatorEditor({
               ))}
             </div>
           </fieldset>
-          {item.status === "ready_to_post" && <label className="sm:col-span-2 rounded-xl border-2 border-orange-300 bg-orange-50 p-4 text-xs font-semibold text-orange-950">Quick Publish · Link TikTok / Reels<input value={draft.publishedLink || ""} onChange={(e) => set("publishedLink", e.target.value)} placeholder="https://www.tiktok.com/@... hoặc https://www.instagram.com/reel/..." className="mt-2 h-11 w-full rounded-lg border border-orange-300 bg-white px-3 text-sm font-normal text-zinc-900 outline-none focus:ring-2 focus:ring-orange-400" /></label>}
-          {item.status === "ready_to_post" && <label className="sm:col-span-2 rounded-xl border-2 border-orange-300 bg-orange-50 p-4 text-xs font-semibold text-orange-950">Quick Publish · Link TikTok / Reels<input value={draft.publishedLink || ""} onChange={(e) => set("publishedLink", e.target.value)} placeholder="https://www.tiktok.com/@... hoặc https://www.instagram.com/reel/..." className="mt-2 h-11 w-full rounded-lg border border-orange-300 bg-white px-3 text-sm font-normal text-zinc-900 outline-none focus:ring-2 focus:ring-orange-400" /></label>}
           <label className="text-xs font-medium sm:col-span-2">
             Caption bài post
             <textarea
@@ -4152,11 +4209,14 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
       setCleanupBusy(false);
     }
   };
-  const pendingIdeas = items.filter((i) => i.status === "idea_pending");
-  const pendingScripts = items.filter((i) => ["scripting", "script_review_creator", "waiting_production"].includes(i.status));
-  const pendingVideos = items.filter((i) => i.status === "video_pending_lead");
+  const pendingIdeas = items.filter((i) =>
+    ["idea_pending", "idea_needs_revision"].includes(i.status),
+  );
+  const pendingScripts = items.filter((i) => i.status === "script_pending");
+  const pendingVideos = items.filter((i) =>
+    ["video_pending", "video_needs_revision"].includes(i.status),
+  );
   const archived = items.filter((i) => i.status === "archived");
-  const leadPipelineStatuses: Status[] = ["idea_pending", "video_pending_lead", "ready_to_publish", "ready_to_post", "published"];
   const published = items.filter((i) => i.status === "published");
   if (view === "Cấu hình hệ thống")
     return (
@@ -4265,7 +4325,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
         </button>
         <section
-          aria-label="Dọn dẹp dữ liệu test"
+          aria-label="Dọn d���p dữ liệu test"
           className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
         >
           <div className="flex items-start gap-3">
@@ -4303,10 +4363,10 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     );
   const shown =
     view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
-      ? items.filter((item) => leadPipelineStatuses.includes(item.status))
+      ? archived
       : view === "Duyệt content"
-        ? [...pendingIdeas, ...pendingVideos]
-        : items.filter((item) => leadPipelineStatuses.includes(item.status));
+        ? [...pendingIdeas, ...pendingScripts]
+        : items;
   return (
     <section>
       <p className="text-xs uppercase tracking-widest text-orange-500">
@@ -4322,17 +4382,19 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
             "Content đã duyệt",
             items.filter((i) =>
               [
-  "scripting",
-  "script_review_creator",
-  "waiting_production",
-  ].includes(i.status),
+                "scripting",
+                "shooting_pending",
+                "shooting_done",
+                "editing_done",
+                "published",
+              ].includes(i.status),
             ).length,
             Check,
           ],
           [
             "Video chưa đăng",
             items.filter((i) =>
-              ["ready_to_publish"].includes(
+              ["shooting_pending", "shooting_done", "editing_done"].includes(
                 i.status,
               ),
             ).length,
@@ -4340,7 +4402,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           ],
           ["Đã đăng tháng này", published.length, Check],
           [
-            "Trễ deadline",
+            "Tr�� deadline",
             items.filter(
               (i) =>
                 i.scheduledAt &&
@@ -4404,9 +4466,8 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                     <span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span>
                     {isPastPublishDeadline(item) && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Trễ deadline</span>}
                   </div>
-<h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-  <StageProgress status={item.status} />
-  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
+                  <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+                  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
                     <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
                     <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
                     <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
@@ -4439,10 +4500,14 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                       </button>
                     </>
                   )}
-                  {["video_pending_lead", "editing_done"].includes(item.status) && (
+                  {item.status === "editing_done" && (
                     <>
                       <button
-                        onClick={() => updateStatus(item, "ready_to_publish")}
+                        onClick={() =>
+                          updateStatus(item, "published", {
+                            publishedLink: item.publishedLink || "Đã đăng",
+                          })
+                        }
                         className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
                       >
                         Duyệt video
@@ -4495,9 +4560,9 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                 onClick={() =>
                   updateStatus(
                     selected,
-                    selected.status === "idea_pending"
-                      ? "idea_rejected"
-                      : "video_rejected",
+                    selected.status === "editing_done"
+                      ? "shooting_done"
+                      : "rejected",
                     { feedback: note, leadNote: note },
                   )
                 }
@@ -4791,10 +4856,11 @@ function LeadWorkspace({
     ].includes(i.status),
   );
   const unpublishedVideos = items.filter((i) =>
-    ["ready_to_publish"].includes(i.status),
+    ["shooting_pending", "shooting_done", "editing_done"].includes(i.status),
   );
-  const archived = items.filter((i) => ["archived", "needs_revision"].includes(i.status));
-  const trashItems = items.filter((i) => i.status === "archived");
+  const archived = items.filter((i) =>
+    ["archived", "needs_revision"].includes(i.status),
+  );
   const published = items.filter((i) => i.status === "published");
   const overdue = items.filter((i) => {
     const publishDate = i.scheduledPublishDate || i.scheduledAt;
@@ -4802,9 +4868,9 @@ function LeadWorkspace({
   });
   const leadWorkflow = {
     "Ý tưởng chờ duyệt": pendingIdeas,
-    "Chờ quay/dựng": items.filter((i) => i.status === "waiting_production"),
+    "Chờ quay/dựng": items.filter((i) => i.status === "script_approved"),
     "Bài đã duyệt": items.filter((i) => ["video_approved", "editing_done"].includes(i.status)),
-    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_publish"),
+    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_post"),
     "Bài đã đăng": published,
     "Trễ deadline": overdue,
   };
@@ -4820,15 +4886,6 @@ function LeadWorkspace({
           : view === "Tổng quan"
             ? items
             : [];
-  if (view === "Quản lý Thùng Rác")
-    return <section><p className="text-xs uppercase tracking-widest text-rose-500">Trash Bin</p><h1 className="mt-1 text-2xl font-semibold">Quản lý Thùng Rác</h1><p className="mt-2 text-sm text-muted-foreground">Các bài đã xóa tạm vẫn có thể khôi phục.</p><div className="mt-6 grid gap-3">{trashItems.length ? trashItems.map((item) => <article key={item.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">{item.title}</h2><p className="mt-1 text-xs text-muted-foreground">Đã xóa tạm · {formatCardDate(item.createdAt)}</p></div><button type="button" onClick={() => persist(item, { status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white">Khôi phục bài</button></article>) : <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Thùng rác đang trống.</div>}</div></section>;
-  if (view === "Báo cáo & Hiệu suất KPI") {
-    const overdueCount = items.filter((item) => isPastPublishDeadline(item) || item.wasOverdue).length;
-    const onTimeCount = published.filter((item) => !item.wasOverdue).length;
-    const totalTracked = Math.max(1, onTimeCount + overdueCount);
-    const onTimePercent = Math.round((onTimeCount / totalTracked) * 100);
-    return <section><p className="text-xs uppercase tracking-widest text-orange-500">Reports & KPI</p><h1 className="mt-1 text-2xl font-semibold">Báo cáo & Hiệu suất KPI</h1><div className="mt-6 grid gap-4 md:grid-cols-2"><div className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Tỷ lệ đúng hạn / trễ hạn</h2><div className="mt-5 h-4 overflow-hidden rounded-full bg-rose-100"><div className="h-full bg-emerald-500" style={{ width: `${onTimePercent}%` }} /></div><div className="mt-3 flex justify-between text-xs"><span className="text-emerald-700">Đúng hạn {onTimeCount} ({onTimePercent}%)</span><span className="text-rose-700">Trễ hạn {overdueCount} ({100 - onTimePercent}%)</span></div></div><div className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Tổng quan</h2><div className="mt-4 grid grid-cols-3 gap-2 text-center"><div><p className="text-2xl font-semibold">{published.length}</p><p className="text-[11px] text-muted-foreground">Đã đăng</p></div><div><p className="text-2xl font-semibold">{published.reduce((sum, item) => sum + (item.views || 0), 0).toLocaleString("vi-VN")}</p><p className="text-[11px] text-muted-foreground">Views</p></div><div><p className="text-2xl font-semibold">{published.reduce((sum, item) => sum + (item.likes || 0), 0).toLocaleString("vi-VN")}</p><p className="text-[11px] text-muted-foreground">Likes</p></div></div></div></div><div className="mt-4 rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">Bài đã đăng · nhập KPI</h2><div className="mt-4 grid gap-3">{published.length ? published.map((item) => <div key={item.id} className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center"><span className="text-sm font-medium">{item.title}</span><span className="text-xs text-muted-foreground">{item.views || 0} Views</span><span className="text-xs text-muted-foreground">{item.likes || 0} Likes</span><button type="button" onClick={() => setSelected(item)} className="rounded-lg border px-3 py-2 text-xs font-semibold">Nhập KPI</button></div>) : <p className="text-sm text-muted-foreground">Chưa có bài đã đăng.</p>}</div></div></section>;
-  }
   if (view === "Dashboard thống kê")
     return (
       <section>
@@ -4933,7 +4990,7 @@ function LeadWorkspace({
           {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
         </button>
         <section
-          aria-label="D���n dẹp dữ liệu test"
+          aria-label="Dọn dẹp dữ liệu test"
           className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
         >
           <h2 className="font-semibold text-red-900">
@@ -5024,22 +5081,21 @@ function LeadWorkspace({
             ))}
           </div>
         )}
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="mt-6 grid max-w-full gap-3 overflow-hidden">
           {cards.length
             ? cards.map((item) => (
                 <article
                   key={item.id}
-                  className="mx-auto flex w-full max-w-[320px] flex-col overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
+                  className="max-w-full overflow-hidden rounded-xl border border-border bg-card p-4"
                 >
-                  <div className="flex min-w-0 flex-col gap-2">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 max-w-full">
                       <span className="text-[10px] uppercase tracking-wider text-orange-500">
                         {statusLabels[item.status]}
                       </span>
-<h2 className="mt-1 w-full break-words line-clamp-2 font-medium">
-  {item.title}
-  </h2>
-  <StageProgress status={item.status} />
+                      <h2 className="mt-1 w-full break-words line-clamp-2 font-medium">
+                        {item.title}
+                      </h2>
                       <p className="mt-1 w-full break-words overflow-hidden text-xs text-muted-foreground">
                         {item.description || item.caption || "Chưa có mô tả."}
                       </p>
@@ -5058,24 +5114,21 @@ function LeadWorkspace({
                         </span>
                       </div>
                     </div>
+                    <button
+                      onClick={() => setSelected(item)}
+                      className="rounded-lg border border-border px-3 py-2 text-xs"
+                    >
+                      Mở và xử lý
+                    </button>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
-                    <span className="rounded-full bg-accent px-2 py-1">{item.contentType || "Chưa phân loại"}</span>
-                    <span className="rounded-full bg-accent px-2 py-1">{item.ownerId ? "Đã phân công" : "Chưa gán"}</span>
-                    {item.status === "video_needs_revision" && <span className="rounded-full bg-rose-100 px-2 py-1 text-rose-700">Cần chỉnh sửa</span>}
-                  </div>
-                  <div className="mt-2 max-w-xl">
-          <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black/5">
+                  <div className="max-w-xl">
+          <div className="relative mt-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
             <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">
               {item.status === "video_needs_revision" ? "CẦN SỬA" : statusLabels[item.status]}
             </div>
             <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
             <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
           </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                    <button type="button" onClick={() => setSelected(item)} className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">Mở chi tiết</button>
-                    {(item.reference || item.finalVideoLink || item.publishedLink) && <a href={item.reference || item.finalVideoLink || item.publishedLink} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-border px-3 py-2 text-xs font-medium">Mở link gốc</a>}
                   </div>
                 </article>
               ))
@@ -5180,9 +5233,8 @@ function LeadWorkspace({
                           <span className="text-[10px] uppercase tracking-wider text-orange-500">
                             {statusLabels[item.status]}
                           </span>
-<h3 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h3>
-  <StageProgress status={item.status} />
-  <ItemMetadata item={item} />
+                          <h3 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h3>
+                          <ItemMetadata item={item} />
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                             <span className="rounded-full bg-accent px-2 py-1">
                               {item.contentType || "Chưa phân loại"}
