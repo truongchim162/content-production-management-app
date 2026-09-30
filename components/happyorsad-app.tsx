@@ -399,7 +399,7 @@ function Login({
       <section className="relative w-full max-w-md border border-zinc-300 bg-[#f7f7f5] p-6 shadow-xl shadow-zinc-500/15 sm:p-9">
         <div className="mb-10 flex items-center justify-between border-b border-zinc-300 pb-5">
           <div className="flex items-center gap-3">
-            <img src="/icon.svg" alt="HAPPYORSAD logo" className="size-12 object-contain" />
+            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-12 rounded-full object-cover" />
             <div>
               <p className="font-serif text-2xl tracking-[0.28em] text-zinc-950">HAPPYORSAD</p>
               <p className="mt-1 text-[9px] uppercase tracking-[0.35em] text-zinc-500">Media workspace</p>
@@ -723,13 +723,16 @@ function RoleDrawer({
           className="fixed inset-y-0 left-0 z-40 w-80 max-w-[86vw] border-r border-stone-200 bg-white p-5 shadow-xl"
         >
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-amber-600">
+            <div className="flex items-center gap-3">
+              <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 rounded-full object-cover" />
+              <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-900">
                 HAPPYORSAD
               </p>
               <h2 className="mt-1 text-lg font-bold text-zinc-900">
                 Menu workspace
               </h2>
+              </div>
             </div>
             <button
               aria-label="Đóng menu"
@@ -871,7 +874,7 @@ function Workspace({
           >
             <Menu aria-hidden="true" />
           </button>
-          <Clapperboard className="size-5 text-zinc-900 dark:text-white" />
+          <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-8 rounded-full object-cover" />
           <span className="text-sm font-semibold text-zinc-900 dark:text-white">{view}</span>
         </div>
         <div className="relative flex items-center gap-3">
@@ -946,11 +949,9 @@ function Workspace({
       </div>
       <div className="mx-auto flex max-w-7xl">
         <aside className="hidden w-60 shrink-0 border-r border-border p-4 lg:block">
-          <div className="mb-8 flex items-center gap-2 font-semibold">
-            <div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-              <Clapperboard className="size-4" />
-            </div>
-            HAPPYORSAD
+          <div className="mb-8 flex items-center gap-3 font-semibold">
+            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 rounded-full object-cover" />
+            <span className="tracking-[0.18em]">HAPPYORSAD</span>
           </div>
           <p className="mb-3 px-2 text-[10px] uppercase tracking-widest text-muted-foreground">
             {roleLabels[role]} workspace
@@ -2824,7 +2825,7 @@ function ScriptEditor({
             className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700"
           >
             <Sparkles className="size-4" />
-            AI gợi ý kịch bản
+            AI gợi ý kịch b��n
           </button>
         </div>
         <div className="mt-3 flex flex-col gap-3">
