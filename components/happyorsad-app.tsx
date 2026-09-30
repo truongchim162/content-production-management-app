@@ -401,7 +401,7 @@ function Login({
           <img
             src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg"
             alt="HAPPYORSAD logo"
-            className="size-24 rounded-full object-cover shadow-md sm:size-28"
+            className="h-24 w-full max-w-[220px] object-contain shadow-md sm:h-28"
           />
         </div>
         <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-zinc-500">
@@ -719,7 +719,7 @@ function RoleDrawer({
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 rounded-full object-cover" />
+              <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 object-contain" />
               <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-900">
                 HAPPYORSAD
@@ -869,7 +869,7 @@ function Workspace({
           >
             <Menu aria-hidden="true" />
           </button>
-          <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-8 rounded-full object-cover" />
+          <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-8 object-contain" />
           <span className="text-sm font-semibold text-zinc-900 dark:text-white">{view}</span>
         </div>
         <div className="relative flex items-center gap-3">
@@ -945,7 +945,7 @@ function Workspace({
       <div className="mx-auto flex max-w-7xl">
         <aside className="hidden w-60 shrink-0 border-r border-border p-4 lg:block">
           <div className="mb-8 flex items-center gap-3 font-semibold">
-            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 rounded-full object-cover" />
+            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-10 object-contain" />
             <span className="tracking-[0.18em]">HAPPYORSAD</span>
           </div>
           <p className="mb-3 px-2 text-[10px] uppercase tracking-widest text-muted-foreground">
