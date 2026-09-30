@@ -96,6 +96,15 @@ type Shot = {
   voice: string;
   text: string;
 };
+type HistoryEntry = {
+  id?: string;
+  action: string;
+  actorName: string;
+  actorRole?: UserRole;
+  note?: string;
+  createdAt: unknown;
+};
+
 type Item = {
   id: string;
   title: string;
@@ -126,6 +135,7 @@ type Item = {
   publishedAt?: unknown;
   feedback?: string;
   feedbackUnread?: number;
+  history?: HistoryEntry[];
 };
 type TaskMessage = {
   id: string;
@@ -252,6 +262,31 @@ const publishedLabel = (value: unknown) => {
         year: "numeric",
       }).format(timestamp)
     : "Chưa cập nhật";
+};
+const relativeTime = (value: unknown) => {
+  const timestamp = publishedTime(value);
+  if (!timestamp) return "Chưa cập nhật";
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return "Vừa xong";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} phút trước`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} giờ trước`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)} ngày trước`;
+  return new Intl.DateTimeFormat("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(timestamp);
+};
+const activityAction = (from: Status | undefined, to: Status | undefined) => {
+  if (to === "approved_idea") return "đã duyệt ý tưởng";
+  if (to === "idea_pending" && from === "idea_needs_revision") return "đã gửi lại ý tưởng";
+  if (to === "script_pending_creator") return "đã gửi kịch bản";
+  if (to === "script_approved") return "đã duyệt kịch bản";
+  if (to === "published") return "đã đăng bài chính thức";
+  if (to === "video_pending" || to === "editing_done") return "đã nộp video";
+  if (to === "idea_needs_revision" || to === "needs_revision") return "đã góp ý yêu cầu chỉnh sửa";
+  return "đã cập nhật bài viết";
 };
 
 export default function Page() {
@@ -527,6 +562,9 @@ function NotificationCenter({
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.message}
                     </p>
+                    <time className="mt-2 block text-[10px] text-muted-foreground" dateTime={String(publishedTime(item.createdAt) || "")}>
+                      {relativeTime(item.createdAt)}
+                    </time>
                   </button>
                 ))
               ) : (
@@ -552,6 +590,9 @@ function NotificationCenter({
           </button>
           <p className="pr-4 text-xs font-semibold">{toast.title}</p>
           <p className="mt-1 text-xs text-muted-foreground">{toast.message}</p>
+          <time className="mt-2 block text-[10px] text-muted-foreground" dateTime={String(publishedTime(toast.createdAt) || "")}>
+            {relativeTime(toast.createdAt)}
+          </time>
           <button
             onClick={() => markRead(toast)}
             className="mt-3 text-xs font-medium text-orange-600"
@@ -1589,6 +1630,14 @@ function ContentWorkspace({
         status: nextStatus,
         ownerId: user.uid,
         createdAt: serverTimestamp(),
+        history: [
+          {
+            action: "đã tạo ý tưởng",
+            actorName: user.displayName || user.email || "Thành viên",
+            actorRole: user.role,
+            createdAt: new Date().toISOString(),
+          },
+        ],
       });
       setItems((all) =>
         all.map((x) => (x.id === optimistic.id ? { ...x, id: ref.id } : x)),
@@ -1630,12 +1679,22 @@ function ContentWorkspace({
       : item.status === "approved_idea" && editingScript
         ? { ...patch, status: "script_pending_creator" as Status }
         : patch;
+    const historyEntry: HistoryEntry = {
+      action: activityAction(item.status, nextPatch.status),
+      actorName: user.displayName || user.email || "Thành viên",
+      actorRole: user.role,
+      createdAt: new Date().toISOString(),
+    };
+    const patchWithHistory = {
+      ...nextPatch,
+      history: [...(item.history || []), historyEntry],
+    };
     setItems((all) =>
-      all.map((x) => (x.id === item.id ? { ...x, ...nextPatch } : x)),
+      all.map((x) => (x.id === item.id ? { ...x, ...patchWithHistory } : x)),
     );
     setSelected(null);
     if (!item.id.startsWith("local-"))
-      await setDoc(doc(db, "contentItems", item.id), nextPatch, {
+      await setDoc(doc(db, "contentItems", item.id), patchWithHistory, {
         merge: true,
       });
     if (nextPatch.status === "pending_approval")
@@ -1871,7 +1930,7 @@ function ContentWorkspace({
             ))
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              Chưa có nội dung ở trạng thái này.
+              Chưa có nội dung �� trạng thái này.
             </div>
           )}
         </div>
@@ -2021,6 +2080,29 @@ function VideoSet({ item }: { item: Item }) {
         <VideoPreview key={kind} url={url} kind={kind} title={item.title} />
       ))}
     </>
+  );
+}
+
+function ActivityTimeline({ history }: { history?: HistoryEntry[] }) {
+  const entries = [...(history || [])].reverse();
+  return (
+    <section className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
+      <h3 className="text-sm font-semibold">Lịch sử xử lý</h3>
+      {entries.length ? (
+        <ol className="mt-3 border-l border-orange-200 pl-4">
+          {entries.map((entry, index) => (
+            <li key={`${entry.id || entry.action}-${index}`} className="relative pb-4 last:pb-0">
+              <span className="absolute -left-[21px] top-1 size-2.5 rounded-full bg-orange-500 ring-4 ring-background" />
+              <p className="text-xs text-muted-foreground">{relativeTime(entry.createdAt)}</p>
+              <p className="mt-1 text-sm"><strong>{entry.actorName}</strong> {entry.action}</p>
+              {entry.note && <p className="mt-1 text-xs text-muted-foreground">“{entry.note}”</p>}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="mt-3 text-xs text-muted-foreground">Chưa có lịch sử xử lý.</p>
+      )}
+    </section>
   );
 }
 
@@ -4329,12 +4411,25 @@ function LeadWorkspace({
       patch.status === "approved_idea" && item.status === "script_pending"
         ? { ...patch, status: "script_approved" as Status }
         : patch;
+    const patchWithHistory = {
+      ...nextPatch,
+      history: [
+        ...(item.history || []),
+        {
+          action: activityAction(item.status, nextPatch.status),
+          actorName: user.displayName || user.email || "Lead",
+          actorRole: "lead" as UserRole,
+          note: nextPatch.feedback || nextPatch.leadNote,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
     setItems((all) =>
-      all.map((x) => (x.id === item.id ? { ...x, ...nextPatch } : x)),
+      all.map((x) => (x.id === item.id ? { ...x, ...patchWithHistory } : x)),
     );
     setSelected(null);
     try {
-      await setDoc(doc(db, "contentItems", item.id), nextPatch, {
+      await setDoc(doc(db, "contentItems", item.id), patchWithHistory, {
         merge: true,
       });
       if (item.ownerId && patch.status === "rejected")
@@ -4747,6 +4842,7 @@ function LeadWorkspace({
                 </button>
               </div>
               <VideoSet item={selected} />
+              <ActivityTimeline history={selected.history} />
               <div className="mt-6 flex flex-wrap gap-2">
                 {["idea_pending", "pending_approval"].includes(
                   selected.status,
