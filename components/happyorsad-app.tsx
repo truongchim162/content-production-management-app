@@ -3070,14 +3070,10 @@ function CreatorWorkspace({
   const [items, setItems] = useState<Item[]>(
     demoItems.filter((item) =>
       [
-        "script_pending_creator",
-        "script_approved",
-        "shooting_pending",
-        "shooting_done",
-        "editing_done",
-        "video_pending",
-        "video_needs_revision",
-        "ready_to_post",
+        "script_review_creator",
+        "waiting_production",
+        "video_rejected",
+        "ready_to_publish",
         "published",
       ].includes(item.status),
     ),
@@ -3114,11 +3110,10 @@ function CreatorWorkspace({
                 !["archived", "rejected"].includes(item.status) &&
                 (item.ownerId === user.uid ||
                   [
-                    "script_pending_creator",
-                    "script_approved",
-                    "video_pending",
-                    "video_needs_revision",
-                    "ready_to_post",
+                    "script_review_creator",
+                    "waiting_production",
+                    "video_rejected",
+                    "ready_to_publish",
                     "published",
                   ].includes(item.status)),
             ),
@@ -3132,10 +3127,10 @@ function CreatorWorkspace({
     const nextPatch =
       patch.status === "published"
         ? { ...patch, status: "published" as Status }
-        : patch.status === "video_pending"
+        : patch.status === "video_pending_lead"
           ? { ...patch, status: "video_pending" as Status }
-          : item.status === "script_pending_creator" &&
-              patch.status === "script_approved"
+          : item.status === "script_review_creator" &&
+              patch.status === "waiting_production"
             ? patch
             : { ...patch, status: item.status };
     setItems((all) =>
@@ -3241,7 +3236,7 @@ function CreatorWorkspace({
       "published",
     ].includes(item.status),
   );
-  const creatorPriority = (item: Item) => ["script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
+  const creatorPriority = (item: Item) => ["script_review_creator", "video_rejected", "script_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
   useEffect(() => {
     if (!creatorFilter) return;
     const timer = window.setTimeout(() => document.querySelector("[data-creator-results]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
@@ -3269,7 +3264,7 @@ function CreatorWorkspace({
                     )
                   : view === "Cần Feedback / Sửa Video"
                     ? items.filter(
-                        (item) => item.status === "video_needs_revision",
+                        (item) => item.status === "video_rejected",
                       )
                     : view === "Danh sách bài đăng"
                       ? filteredPublishedItems
@@ -3389,7 +3384,7 @@ function CreatorWorkspace({
         ))}
       </div>
       <div data-creator-results>
-      {view === "Lịch quay & dựng" ? <CreatorProductionDay items={items} onOpen={(item) => setSelected(item)} /> : view === "Danh sách bài đăng" ? (
+      {view === "Lịch quay & dựng" ? <CreatorProductionDay items={visible} onOpen={(item) => setSelected(item)} /> : view === "Danh sách bài đăng" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {publishedItems.length ? (
             publishedItems.map((item) => (
@@ -3476,9 +3471,9 @@ function CreatorProductionDay({ items, onOpen }: { items: Item[]; onOpen: (item:
   const today = new Date();
   const isToday = (item: Item) => { const value = item.scheduledAt || item.scheduledPublishDate; if (!value) return false; const date = new Date(value); return date.toDateString() === today.toDateString(); };
   const groups = [
-    { label: "Cần quay hôm nay", icon: Film, statuses: ["script_approved", "shooting_pending"] },
-    { label: "Cần dựng hôm nay", icon: Clapperboard, statuses: ["shooting_done", "editing_done"] },
-    { label: "Cần đăng hôm nay", icon: Send, statuses: ["ready_to_post", "ready_to_publish"] },
+    { label: "Cần quay hôm nay", icon: Film, statuses: ["script_review_creator", "waiting_production"] },
+    { label: "Cần dựng hôm nay", icon: Clapperboard, statuses: ["waiting_production", "video_rejected"] },
+    { label: "Cần đăng hôm nay", icon: Send, statuses: ["ready_to_publish"] },
   ];
   return <div className="grid gap-4">{groups.map(({ label, icon: Icon, statuses }) => { const list = items.filter((item) => statuses.includes(item.status) && (isToday(item) || !item.scheduledAt)); return <section key={label} className="rounded-2xl border border-border bg-card p-4"><div className="flex items-center gap-2"><Icon className="size-4 text-orange-500" /><h2 className="text-sm font-semibold">{label}</h2><span className="ml-auto rounded-full bg-muted px-2 py-1 text-xs">{list.length}</span></div><div className="mt-3 grid gap-2">{list.length ? list.map((item) => <button key={item.id} type="button" onClick={() => onOpen(item)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted"><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.title}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{item.location || "Chưa có bối cảnh"} · {item.outfit || "Chưa có outfit"}</span></span><Link2 className="size-4 shrink-0 text-muted-foreground" /></button>) : <p className="py-4 text-center text-xs text-muted-foreground">Không có công việc hôm nay.</p>}</div></section>; })}</div>;
 }
