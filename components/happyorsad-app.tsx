@@ -1920,7 +1920,7 @@ function ContentWorkspace({
             visible.map((item) => (
               <article
                 key={item.id}
-                className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
+                className="group overflow-hidden rounded-xl border border-border bg-card text-center shadow-sm transition-shadow hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2081,7 +2081,7 @@ function IdeaVault({
       {filtered.length ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {filtered.map((item) => (
-            <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+            <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white text-center shadow-sm transition-shadow hover:shadow-md">
               <div className="relative aspect-[9/16] w-full overflow-hidden bg-zinc-100">
                 {item.reference ? (
                   <VideoPreview url={item.reference} kind="ref" title={item.title} />
@@ -2089,10 +2089,10 @@ function IdeaVault({
                   <div className="grid size-full place-items-center p-3 text-center text-xs text-zinc-500">Chưa có video tham khảo</div>
                 )}
               </div>
-              <div className="rounded-b-lg border-t border-stone-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-b-lg border-t border-stone-200 bg-white p-5 text-center dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
                 <h2 className="line-clamp-2 text-base font-bold text-zinc-900 dark:text-zinc-100" title={item.title}>{item.title}</h2>
                 <p className="mt-1 line-clamp-2 text-[10px] font-medium text-zinc-600">{item.description || "Chưa có ghi chú."}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
+                <div className="my-3 flex flex-wrap items-center justify-center gap-2">
                   <button type="button" onClick={() => onPromote(item)} className="rounded-md bg-zinc-900 px-2 py-1 text-sm font-medium text-white">Lấy làm idea chính</button>
                   {item.reference && <a href={item.reference} target="_blank" rel="noreferrer" className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Mở link</a>}
                   <button type="button" onClick={() => onEdit(item)} className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Sửa</button>
@@ -2113,7 +2113,7 @@ type VideoKind = "ref" | "source" | "final" | "published";
 const videoKinds: Record<VideoKind, { icon: string; label: string }> = {
   ref: { icon: "📌", label: "VIDEO THAM KHẢO (REF)" },
   source: { icon: "🎬", label: "VIDEO SOURCE DỰNG (FILE GỐC)" },
-  final: { icon: "✂️", label: "VIDEO BẢN DỰNG HOÀN CHỈNH" },
+  final: { icon: "✂️", label: "VIDEO B���N DỰNG HOÀN CHỈNH" },
   published: { icon: "🚀", label: "VIDEO BÀI ĐĂNG THỰC TẾ" },
 };
 const isVideoUrl = (value?: string) =>
@@ -2784,7 +2784,7 @@ function ScriptEditor({
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
-                <strong>Feedback từ Lead:</strong>
+                <strong>Feedback t��� Lead:</strong>
                 <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
               </div>
             )}
@@ -3278,7 +3278,7 @@ function CreatorWorkspace({
                   </p>
                   <ItemMetadata item={item} />
                 </div>
-                <div className="flex flex-wrap content-start gap-2">
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   {(item.platforms || []).map((platform) => (
                     <span
                       key={platform}
@@ -3343,7 +3343,7 @@ function CreatorWorkspace({
 
 function ItemMetadata({ item }: { item: Item }) {
   return (
-    <div className="my-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-stone-500">
+    <div className="my-2.5 flex flex-wrap items-center justify-center gap-3 text-center text-xs font-normal text-stone-500 dark:text-zinc-400">
       <span>Sản phẩm: {item.productName || item.contentType || "Khác"}</span>
       <span>Tạo: {formatCardDate(item.createdAt)}</span>
       <span>Duyệt: {formatCardDate(item.scriptApprovedAt || item.approvedAt)}</span>
@@ -3358,9 +3358,9 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
     item.status !== "published";
   return (
     <article
-      className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md ${overdue ? "border-destructive" : "border-border"}`}
+      className={`group overflow-hidden rounded-xl border bg-card text-center shadow-sm transition-shadow hover:shadow-md ${overdue ? "border-destructive" : "border-border"}`}
     >
-      <div className="flex items-start justify-between gap-3 p-3">
+      <div className="flex flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -3412,7 +3412,7 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
               </div>
             </div>
           )}
-          <VideoPreview {...primaryVideo(item)} title={item.title} />
+          <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
         </div>
         <button
           onClick={onOpen}
@@ -4268,7 +4268,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                   <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
                     <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
                     <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
-                    <VideoPreview {...primaryVideo(item)} title={item.title} />
+                    <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {item.caption || item.description || "Chưa có mô tả."}
@@ -4914,7 +4914,7 @@ function LeadWorkspace({
               {item.status === "video_needs_revision" ? "CẦN SỬA" : statusLabels[item.status]}
             </div>
             <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
-            <VideoPreview {...primaryVideo(item)} title={item.title} />
+            <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
           </div>
                   </div>
                 </article>
