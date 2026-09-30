@@ -1726,6 +1726,8 @@ function ContentWorkspace({
           [
             "idea_pending",
             "idea_needs_revision",
+            "idea_rejected",
+            "script_rejected",
             "pending_approval",
             "approved_idea",
             "script_pending",
@@ -2135,7 +2137,7 @@ function StageDetailEditor({
   onDelete: () => void;
 }) {
   const canDelete = role === "lead" || (role === "content" && item.status === "idea_pending");
-  const canEdit = (role === "content" && ["idea_pending", "scripting"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && ["video_pending_lead", "ready_to_publish", "published"].includes(item.status));
+  const canEdit = (role === "content" && ["idea_pending", "scripting", "script_rejected"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && ["video_pending_lead", "ready_to_publish", "published"].includes(item.status));
   const canCommentScript = role === "lead" && item.status === "script_review_creator";
   const readOnly = !canEdit;
   const [draft, setDraft] = useState({
@@ -3353,7 +3355,6 @@ function CreatorWorkspace({
       "editing_done",
       "video_pending",
       "needs_revision",
-      "script_rejected",
       "video_rejected",
       "ready_to_post",
     ].includes(item.status),
@@ -4267,14 +4268,11 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
       setCleanupBusy(false);
     }
   };
-  const pendingIdeas = items.filter((i) =>
-    ["idea_pending", "idea_needs_revision"].includes(i.status),
-  );
-  const pendingScripts = items.filter((i) => i.status === "script_pending");
-  const pendingVideos = items.filter((i) =>
-    ["video_pending", "video_needs_revision"].includes(i.status),
-  );
+  const pendingIdeas = items.filter((i) => i.status === "idea_pending");
+  const pendingScripts = items.filter((i) => i.status === "script_review_creator");
+  const pendingVideos = items.filter((i) => i.status === "video_pending_lead");
   const archived = items.filter((i) => i.status === "archived");
+  const leadPipelineStatuses: Status[] = ["idea_pending", "video_pending_lead", "ready_to_publish", "ready_to_post", "published"];
   const published = items.filter((i) => i.status === "published");
   if (view === "Cấu hình hệ thống")
     return (
@@ -4421,10 +4419,10 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     );
   const shown =
     view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
-      ? archived
+      ? items.filter((item) => leadPipelineStatuses.includes(item.status))
       : view === "Duyệt content"
-        ? [...pendingIdeas, ...pendingScripts]
-        : items;
+        ? [...pendingIdeas, ...pendingVideos]
+        : items.filter((item) => leadPipelineStatuses.includes(item.status));
   return (
     <section>
       <p className="text-xs uppercase tracking-widest text-orange-500">
@@ -4559,14 +4557,10 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                       </button>
                     </>
                   )}
-                  {item.status === "editing_done" && (
+                  {["video_pending_lead", "editing_done"].includes(item.status) && (
                     <>
                       <button
-                        onClick={() =>
-                          updateStatus(item, "published", {
-                            publishedLink: item.publishedLink || "Đã đăng",
-                          })
-                        }
+                        onClick={() => updateStatus(item, "ready_to_publish")}
                         className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
                       >
                         Duyệt video
@@ -4619,9 +4613,9 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                 onClick={() =>
                   updateStatus(
                     selected,
-                    selected.status === "editing_done"
-                      ? "shooting_done"
-                      : "rejected",
+                    selected.status === "idea_pending"
+                      ? "idea_rejected"
+                      : "video_rejected",
                     { feedback: note, leadNote: note },
                   )
                 }
