@@ -1067,6 +1067,7 @@ function ProfileMenu({
   onClose: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   return (
     <>
       {
@@ -1087,7 +1088,7 @@ function ProfileMenu({
             </span>
           </button>
           <button
-            onClick={onLogout}
+            onClick={() => setConfirmLogout(true)}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-destructive/10"
           >
             <LogOut className="size-4" />
@@ -1095,6 +1096,7 @@ function ProfileMenu({
           </button>
         </div>
       }
+      <ConfirmDialogModal open={confirmLogout} title="Đăng xuất tài khoản?" description="Bạn sẽ được đưa về màn hình đăng nhập." confirmLabel="Đăng xuất" destructive onCancel={() => setConfirmLogout(false)} onConfirm={() => { setConfirmLogout(false); onLogout(); }} />
       {open && (
         <ProfileModal
           user={user}
@@ -1376,7 +1378,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
       setError(
         e?.code === "auth/email-already-in-use"
           ? "Email này đã tồn tại trong Firebase Authentication."
-          : `Không thể tạo tài khoản (${e?.code ?? "unknown"}).`,
+          : `Kh��ng thể tạo tài khoản (${e?.code ?? "unknown"}).`,
       );
     } finally {
       setBusy(false);
@@ -2065,6 +2067,17 @@ function ContentWorkspace({
   );
 }
 
+function ConfirmDialogModal({ open, title, description, confirmLabel = "Xác nhận", destructive = false, onCancel, onConfirm }: { open: boolean; title: string; description: string; confirmLabel?: string; destructive?: boolean; onCancel: () => void; onConfirm: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onCancel]);
+  if (!open) return null;
+  return <div className="fixed inset-0 z-[100] grid place-items-center bg-black/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.currentTarget === event.target) onCancel(); }}><div role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"><h2 id="confirm-dialog-title" className="text-lg font-semibold text-foreground">{title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={onCancel} className="rounded-xl border border-border px-4 py-2 text-sm text-muted-foreground">Hủy bỏ</button><button type="button" onClick={onConfirm} className={`rounded-xl px-4 py-2 text-sm font-medium text-white ${destructive ? "bg-rose-600 hover:bg-rose-700" : "bg-zinc-900 hover:bg-zinc-800"}`}>{confirmLabel}</button></div></div></div>;
+}
+
 function SmartVideoPreview({ url }: { url: string }) {
   const trimmed = url.trim();
   if (!trimmed) return null;
@@ -2108,6 +2121,8 @@ function StageDetailEditor({
     leadNote: item.leadNote || item.feedback || "",
   });
   const [showReschedule, setShowReschedule] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState("");
   const [newPublishDate, setNewPublishDate] = useState("");
   const feedbackTooShort = draft.leadNote.trim().length < 10;
   const update = (key: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [key]: value }));
@@ -2124,11 +2139,11 @@ function StageDetailEditor({
         const url = new URL(draft.publishedLink.trim());
         const host = url.hostname.toLowerCase();
         if (!/^https?:$/.test(url.protocol) || !/(tiktok\\.com|instagram\\.com|instagr\\.am|shopee\\.)/.test(host)) {
-          window.alert("URL phải là liên kết TikTok, Instagram hoặc Shopee hợp lệ.");
+          setDialogMessage("URL phải là liên kết TikTok, Instagram hoặc Shopee hợp lệ.");
           return;
         }
       } catch {
-        window.alert("Vui lòng nhập URL bài đã đăng hợp lệ.");
+        setDialogMessage("Vui lòng nhập URL bài đã đăng hợp lệ.");
         return;
       }
     }
@@ -2146,7 +2161,7 @@ function StageDetailEditor({
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
       {(item.feedbackHistory?.length || item.history?.length) ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.feedbackHistory?.map((entry, index) => <div key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><div className="flex items-center justify-between gap-2"><strong>{entry.author}</strong><span className="text-muted-foreground">{entry.stage === "idea" ? "Ý tưởng" : entry.stage === "script" ? "Kịch bản" : "Video"} · {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(entry.createdAt))}</span></div><p className="mt-1 whitespace-pre-wrap">{entry.content}</p></div>)}{item.history?.filter((entry) => entry.note).map((entry, index) => <p key={`legacy-${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
-    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => { if (window.confirm("Bạn có chắc chắn muốn xóa bài viết này?")) onDelete(); }} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer>{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
+    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => setConfirmDelete(true)} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer><ConfirmDialogModal open={confirmDelete} title="Xóa bài viết?" description="Thao tác này không thể hoàn tác." confirmLabel="Xóa bài viết" destructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onDelete(); }} /><ConfirmDialogModal open={Boolean(dialogMessage)} title="Không thể thực hiện" description={dialogMessage} confirmLabel="Đã hiểu" onCancel={() => setDialogMessage("")} onConfirm={() => setDialogMessage("")} />{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
 }
 
 function IdeaVault({
@@ -2231,7 +2246,7 @@ function IdeaVault({
                   <button type="button" onClick={() => onPromote(item)} className="rounded-md bg-zinc-900 px-2 py-1 text-sm font-medium text-white">Lấy làm idea chính</button>
                   {item.reference && <a href={item.reference} target="_blank" rel="noreferrer" className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Mở link</a>}
                   <button type="button" onClick={() => onEdit(item)} className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Sửa</button>
-                  {canDelete(item) && <button type="button" onClick={() => { if (window.confirm("Bạn có chắc chắn muốn xóa bài viết này?")) onDelete(item); }} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">Xóa</button>}
+                  {canDelete(item) && <button type="button" onClick={() => onDelete(item)} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">Xóa</button>}
                 </div>
               </div>
             </article>
@@ -4170,10 +4185,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
   };
   const cleanupTestData = async () => {
     if (
-      cleanupBusy ||
-      !window.confirm(
-        "Xác nhận dọn sạch tất cả ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống, tài khoản và phân quyền sẽ được giữ nguyên.",
-      )
+      cleanupBusy
     )
       return;
     setCleanupBusy(true);
@@ -4753,10 +4765,7 @@ function LeadWorkspace({
   };
   const cleanupTestData = async () => {
     if (
-      cleanupBusy ||
-      !window.confirm(
-        "Xác nhận xóa toàn bộ ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống và tài khoản sẽ được giữ nguyên.",
-      )
+      cleanupBusy
     )
       return;
     setCleanupBusy(true);
