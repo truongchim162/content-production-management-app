@@ -2062,6 +2062,19 @@ function ContentWorkspace({
   );
 }
 
+function SmartVideoPreview({ url }: { url: string }) {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const isDirect = /\.(mp4|webm|mov)(?:[?#].*)?$/i.test(trimmed);
+  const isTikTok = /(?:tiktok\.com|vm\.tiktok\.com)/i.test(trimmed);
+  const isInstagram = /(?:instagram\.com|instagr\.am)/i.test(trimmed);
+  const platform = isTikTok ? "TikTok" : isInstagram ? "Instagram Reels" : "Video";
+  if (isDirect) {
+    return <video controls playsInline preload="metadata" loading="lazy" className="aspect-video w-full rounded-xl bg-black object-contain" src={trimmed} />;
+  }
+  return <div className="relative aspect-[9/16] max-h-[28rem] w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-950 via-zinc-800 to-rose-900 p-5 text-white"><div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,255,255,0.22),transparent_35%)]" /><div className="relative flex h-full flex-col justify-between"><div><span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">{platform}</span><h3 className="mt-4 text-2xl font-semibold">Mở video trên {platform}</h3><p className="mt-2 text-sm text-white/70">Nền tảng này không cho phép nhúng trực tiếp. Mở liên kết để xem video đầy đủ.</p></div><a href={trimmed} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-zinc-900">Xem trực tiếp trên {platform}</a></div></div>;
+}
+
 function StageDetailEditor({
   item,
   role,
@@ -2126,7 +2139,7 @@ function StageDetailEditor({
       {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}{field("Góc quay / Hành động", "location", "Mô tả góc máy")}{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
       {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngoại cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isVideoRevision && <div className="grid gap-4"><p className="text-sm font-semibold">Nộp lại bản dựng video</p>{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
-      {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <a href={item.finalVideoLink} target="_blank" rel="noreferrer" className="rounded-lg border p-3 text-sm text-blue-700 underline">Mở video dựng</a>}<label className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
+      {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <SmartVideoPreview url={item.finalVideoLink} />}<label data-feedback-form className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
       {(item.feedbackHistory?.length || item.history?.length) ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.feedbackHistory?.map((entry, index) => <div key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><div className="flex items-center justify-between gap-2"><strong>{entry.author}</strong><span className="text-muted-foreground">{entry.stage === "idea" ? "Ý tưởng" : entry.stage === "script" ? "Kịch bản" : "Video"} · {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(entry.createdAt))}</span></div><p className="mt-1 whitespace-pre-wrap">{entry.content}</p></div>)}{item.history?.filter((entry) => entry.note).map((entry, index) => <p key={`legacy-${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
@@ -2424,7 +2437,7 @@ function CreativeAssistant({
     lead: {
       title: "AI Cố Vấn Chiến Lược & Quản Lý",
       quick: [
-        "Phân tích hiệu su��t tuần",
+        "Phân tích hiệu su��t tu��n",
         "Viết nhận xét yêu cầu sửa bài",
         "Đề xuất chiến lược tháng tới",
         "Đánh giá KPI team",
