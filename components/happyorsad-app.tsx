@@ -408,7 +408,7 @@ function Login({
         <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-zinc-500">
           Welcome back
         </p>
-        <h1 className="font-serif text-3xl font-normal tracking-tight">How do you feel today?</h1>
+        <h1 className="font-serif text-3xl font-normal italic tracking-tight">How do you feel today?</h1>
         <p className="mt-3 text-sm text-zinc-600">
           Đăng nhập để tiếp tục công việc của bạn.
         </p>
@@ -1166,7 +1166,7 @@ function ProfileModal({
             onClick={() => setTab("password")}
             className={`flex-1 rounded-md py-2 text-xs ${tab === "password" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
           >
-            Đổi mật khẩu
+            Đổi mật kh��u
           </button>
         </div>
         {message && (
