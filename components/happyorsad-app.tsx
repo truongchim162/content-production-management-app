@@ -1434,7 +1434,7 @@ function ContentWorkspace({
     description?: string;
   }>();
   const [contentFilter, setContentFilter] = useState<
-    "all" | "pending" | "scripting" | "archived"
+    "all" | "pending" | "approved" | "scripting" | "archived"
   >("all");
   useEffect(() => {
     const source = canManageAll
@@ -1484,6 +1484,19 @@ function ContentWorkspace({
       pending: items.filter((i) =>
         ["idea_pending", "idea_needs_revision"].includes(i.status),
       ).length,
+      approved: items.filter((i) =>
+        [
+          "approved_idea",
+          "script_pending",
+          "script_pending_creator",
+          "script_approved",
+          "scripting",
+          "shooting_pending",
+          "shooting_done",
+          "editing_done",
+          "published",
+        ].includes(i.status),
+      ).length,
       scripting: items.filter((i) =>
         ["scripting", "approved_idea"].includes(i.status),
       ).length,
@@ -1518,9 +1531,23 @@ function ContentWorkspace({
           ? base.filter((i) =>
               ["idea_pending", "idea_needs_revision"].includes(i.status),
             )
-          : base.filter((i) =>
-              ["scripting", "approved_idea"].includes(i.status),
-            );
+          : contentFilter === "approved"
+            ? base.filter((i) =>
+                [
+                  "approved_idea",
+                  "script_pending",
+                  "script_pending_creator",
+                  "script_approved",
+                  "scripting",
+                  "shooting_pending",
+                  "shooting_done",
+                  "editing_done",
+                  "published",
+                ].includes(i.status),
+              )
+            : base.filter((i) =>
+                ["scripting", "approved_idea"].includes(i.status),
+              );
     return [...filtered].sort(
       (a, b) =>
         (itemTime(b.approvedAt) || itemTime(b.createdAt)) -
@@ -1631,6 +1658,11 @@ function ContentWorkspace({
       key: "pending" as const,
       label: "Chờ duyệt",
       value: contentStats.pending,
+    },
+    {
+      key: "approved" as const,
+      label: "Tổng ý tưởng được duyệt",
+      value: contentStats.approved,
     },
     {
       key: "scripting" as const,
