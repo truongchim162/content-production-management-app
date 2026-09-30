@@ -1507,7 +1507,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
                   placeholder="Nguyễn Văn A"
                 />
                 <Field
-                  label="Email đăng nhập"
+                  label="Email đăng nh��p"
                   value={form.email}
                   onChange={(value) => setForm({ ...form, email: value })}
                   placeholder="content2@happyorsad.vn"
@@ -1780,7 +1780,7 @@ function ContentWorkspace({
   { key: "pending" as const, label: "CHỜ LEAD DUYỆT YT", value: contentStats.pending },
   { key: "scripting" as const, label: "CẦN VIẾT / SỬA KỊCH BẢN", value: contentStats.scripting },
   { key: "creator" as const, label: "KỊCH BẢN CHỜ CREATOR DUYỆT", value: contentStats.creator },
-  { key: "archived" as const, label: "KHO LƯU TRỮ (ĐÃ HOÀN THÀNH)", value: contentStats.archived },
+  { key: "archived" as const, label: "CHUYỂN ĐỔI THÀNH BÀI ĐĂNG", value: contentStats.archived },
   ];
   const formatDate = (value: unknown) => {
     const timestamp = itemTime(value);
