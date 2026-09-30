@@ -2040,23 +2040,58 @@ function ContentWorkspace({
           )}
         </div>
       )}
-{selected &&
-          (["idea_pending", "idea_needs_revision"].includes(selected.status) ? (
-            <IdeaRevisionEditor
-              item={selected}
-              onClose={() => setSelected(null)}
-              onSave={(patch) => updateItem(selected, patch)}
-            />
-          ) : (
-            <ScriptEditor
-              item={selected}
-              onClose={() => setSelected(null)}
-              onSave={(patch) => updateItem(selected, patch)}
-              onDelete={() => removeItem(selected)}
-            />
-          ))}
+{selected && (
+          <StageDetailEditor
+            item={selected}
+            onClose={() => setSelected(null)}
+            onSave={(patch) => updateItem(selected, patch)}
+          />
+        )}
     </>
   );
+}
+
+function StageDetailEditor({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: Item;
+  onClose: () => void;
+  onSave: (patch: Partial<Item>) => void;
+}) {
+  const readOnly = ["script_review_creator", "waiting_production", "video_pending_lead", "ready_to_publish", "published"].includes(item.status);
+  const [draft, setDraft] = useState({
+    title: item.title,
+    contentType: item.contentType || "",
+    reference: item.reference || "",
+    goal: item.goal || "",
+    location: item.location || "",
+    outfit: item.outfit || "",
+    scheduledAt: item.scheduledAt || "",
+    finalVideoLink: item.finalVideoLink || "",
+    publishedLink: item.publishedLink || "",
+    leadNote: item.leadNote || item.feedback || "",
+  });
+  const update = (key: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [key]: value }));
+  const stage = item.status;
+  const isIdea = ["idea_pending", "idea_needs_revision"].includes(stage);
+  const isScript = stage === "scripting";
+  const isProduction = ["script_review_creator", "waiting_production"].includes(stage);
+  const isReview = stage === "video_pending_lead" || ["video_pending", "editing_done"].includes(stage);
+  const isPublish = ["ready_to_publish", "ready_to_post"].includes(stage);
+  const save = (extra: Partial<Item> = {}) => onSave({ ...draft, ...extra, title: draft.title });
+  const field = (label: string, key: keyof typeof draft, placeholder = "") => <label className="grid gap-1.5 text-xs font-medium">{label}<input value={draft[key]} disabled={readOnly} onChange={(event) => update(key, event.target.value)} placeholder={placeholder} className="h-10 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-70" /></label>;
+  return <div className="fixed inset-0 z-40 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><header className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">{statusLabels[item.status]}</p><h2 className="mt-1 text-xl font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-5" /></button></header>
+    <div className="mt-5 grid gap-4">
+      {isIdea && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title", "Tên bài viết")}{field("Dạng Content", "contentType", "Review / Outfit / How-to")}{field("Mục tiêu", "goal", "Tăng tương tác")}{field("Link Ref", "reference", "https://...")}</div>}
+      {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}{field("Góc quay / Hành động", "location", "Mô tả góc máy")}{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
+      {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngoại cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
+      {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <a href={item.finalVideoLink} target="_blank" rel="noreferrer" className="rounded-lg border p-3 text-sm text-blue-700 underline">Mở video dựng</a>}{field("Feedback / Góp ý của Lead", "leadNote", "Nhập góp ý")}</div>}
+      {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
+      {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
+      {item.history?.length ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.history.filter((entry) => entry.note).map((entry, index) => <p key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
+    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{isReview && <><button type="button" onClick={() => save({ status: "video_needs_revision", feedback: draft.leadNote })} className="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && <button type="button" disabled={!draft.finalVideoLink || !draft.scheduledAt || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{!readOnly && !isReview && !isPublish && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer></section></div>;
 }
 
 function IdeaVault({
