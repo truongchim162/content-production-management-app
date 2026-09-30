@@ -147,6 +147,7 @@ type Item = {
   editNote?: string;
   sourceLink?: string;
   shootNote?: string;
+  shootChecklist?: { location: boolean; outfit: boolean; props: boolean };
   scheduledAt?: string;
   scheduledPublishDate?: string;
   wasOverdue?: boolean;
@@ -3472,7 +3473,7 @@ function CreatorWorkspace({
           </button>
         ))}
       </div>
-      {view === "Danh sách bài đăng" ? (
+      {view === "Lịch quay & dựng" ? <CreatorProductionDay items={items} onOpen={(item) => setSelected(item)} /> : view === "Danh sách bài đăng" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {publishedItems.length ? (
             publishedItems.map((item) => (
@@ -3552,6 +3553,17 @@ function CreatorWorkspace({
       )}
     </>
   );
+}
+
+function CreatorProductionDay({ items, onOpen }: { items: Item[]; onOpen: (item: Item) => void }) {
+  const today = new Date();
+  const isToday = (item: Item) => { const value = item.scheduledAt || item.scheduledPublishDate; if (!value) return false; const date = new Date(value); return date.toDateString() === today.toDateString(); };
+  const groups = [
+    { label: "Cần quay hôm nay", icon: Film, statuses: ["script_approved", "shooting_pending"] },
+    { label: "Cần dựng hôm nay", icon: Clapperboard, statuses: ["shooting_done", "editing_done"] },
+    { label: "Cần đăng hôm nay", icon: Send, statuses: ["ready_to_post", "ready_to_publish"] },
+  ];
+  return <div className="grid gap-4">{groups.map(({ label, icon: Icon, statuses }) => { const list = items.filter((item) => statuses.includes(item.status) && (isToday(item) || !item.scheduledAt)); return <section key={label} className="rounded-2xl border border-border bg-card p-4"><div className="flex items-center gap-2"><Icon className="size-4 text-orange-500" /><h2 className="text-sm font-semibold">{label}</h2><span className="ml-auto rounded-full bg-muted px-2 py-1 text-xs">{list.length}</span></div><div className="mt-3 grid gap-2">{list.length ? list.map((item) => <button key={item.id} type="button" onClick={() => onOpen(item)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted"><span className="min-w-0"><span className="block truncate text-sm font-medium">{item.title}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{item.location || "Chưa có bối cảnh"} · {item.outfit || "Chưa có outfit"}</span></span><Link2 className="size-4 shrink-0 text-muted-foreground" /></button>) : <p className="py-4 text-center text-xs text-muted-foreground">Không có công việc hôm nay.</p>}</div></section>; })}</div>;
 }
 
 function ItemMetadata({ item }: { item: Item }) {
@@ -3671,6 +3683,7 @@ function CreatorEditor({
   const [draft, setDraft] = useState(item);
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
+  const [checklist, setChecklist] = useState(item.shootChecklist || { location: false, outfit: false, props: false });
   const [publishErrors, setPublishErrors] = useState({
     scheduledAt: false,
     finalVideoLink: false,
@@ -3714,6 +3727,11 @@ function CreatorEditor({
       scheduledAt: !draft.scheduledAt?.trim(),
       finalVideoLink: !draft.finalVideoLink?.trim(),
     };
+    const publishUrl = draft.publishedLink?.trim() || "";
+    if (!/^https?:\/\/(www\.)?(tiktok\.com|instagram\.com|instagr\.am)\//i.test(publishUrl)) {
+      showToast("Vui lòng dán link TikTok hoặc Instagram Reels hợp lệ.", true);
+      return;
+    }
     if (errors.scheduledAt || errors.finalVideoLink) {
       setPublishErrors(errors);
       showToast(
@@ -3747,6 +3765,7 @@ function CreatorEditor({
             <X className="size-4" />
           </button>
         </div>
+        {(item.status === "shooting_pending" || item.status === "script_approved") && <fieldset className="mb-4 rounded-xl border border-orange-200 bg-orange-50/70 p-3"><legend className="px-1 text-xs font-semibold text-orange-900">Shooting checklist</legend><div className="mt-2 grid grid-cols-3 gap-2">{([ ["location", "Bối cảnh"], ["outfit", "Outfit"], ["props", "Đạo cụ"] ] as const).map(([key, label]) => <label key={key} className="flex min-h-11 items-center gap-2 rounded-lg border border-orange-200 bg-white px-2 text-xs font-medium text-zinc-800"><input type="checkbox" checked={checklist[key]} onChange={(event) => { const next = { ...checklist, [key]: event.target.checked }; setChecklist(next); onSave({ shootChecklist: next }); }} className="size-4 accent-orange-500" />{label}</label>)}</div></fieldset>}
         <div className="grid gap-4 sm:grid-cols-2">
           <CreatorInput
             label="Bối cảnh"
@@ -3880,6 +3899,8 @@ function CreatorEditor({
               ))}
             </div>
           </fieldset>
+          {item.status === "ready_to_post" && <label className="sm:col-span-2 rounded-xl border-2 border-orange-300 bg-orange-50 p-4 text-xs font-semibold text-orange-950">Quick Publish · Link TikTok / Reels<input value={draft.publishedLink || ""} onChange={(e) => set("publishedLink", e.target.value)} placeholder="https://www.tiktok.com/@... hoặc https://www.instagram.com/reel/..." className="mt-2 h-11 w-full rounded-lg border border-orange-300 bg-white px-3 text-sm font-normal text-zinc-900 outline-none focus:ring-2 focus:ring-orange-400" /></label>}
+          {item.status === "ready_to_post" && <label className="sm:col-span-2 rounded-xl border-2 border-orange-300 bg-orange-50 p-4 text-xs font-semibold text-orange-950">Quick Publish · Link TikTok / Reels<input value={draft.publishedLink || ""} onChange={(e) => set("publishedLink", e.target.value)} placeholder="https://www.tiktok.com/@... hoặc https://www.instagram.com/reel/..." className="mt-2 h-11 w-full rounded-lg border border-orange-300 bg-white px-3 text-sm font-normal text-zinc-900 outline-none focus:ring-2 focus:ring-orange-400" /></label>}
           <label className="text-xs font-medium sm:col-span-2">
             Caption bài post
             <textarea
