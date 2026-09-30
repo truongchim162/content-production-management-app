@@ -747,7 +747,7 @@ function RoleDrawer({
           [
             "Cấu hình hệ thống",
             Settings,
-            "Cấu hình hệ thống & Quản lý nhân s���",
+            "Cấu hình hệ thống & Quản lý nhân sự",
           ],
         ]
       : role === "content"
@@ -1123,7 +1123,7 @@ function ProfileModal({
       );
       setMessage("Đã lưu thông tin cá nhân.");
     } catch {
-      setError("Không thể c��p nhật hồ sơ. Vui lòng thử lại.");
+      setError("Không thể cập nhật hồ sơ. Vui lòng thử lại.");
     } finally {
       setBusy(false);
     }
@@ -1189,7 +1189,7 @@ function ProfileModal({
             onClick={() => setTab("password")}
             className={`flex-1 rounded-md py-2 text-xs ${tab === "password" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
           >
-            Đổi m��t kh��u
+            Đổi mật khẩu
           </button>
         </div>
         {message && (
@@ -1351,7 +1351,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
       setError(
         e?.code === "auth/email-already-in-use"
           ? "Email này đã tồn tại trong Firebase Authentication."
-          : `Kh��ng thể tạo tài khoản (${e?.code ?? "unknown"}).`,
+          : `Không thể tạo tài khoản (${e?.code ?? "unknown"}).`,
       );
     } finally {
       setBusy(false);
@@ -1585,9 +1585,7 @@ function ContentWorkspace({
     title?: string;
     description?: string;
   }>();
-  const [contentFilter, setContentFilter] = useState<
-    "all" | "pending" | "approved" | "scripting" | "archived"
-  >("all");
+  const [contentFilter, setContentFilter] = useState<"all" | "pending" | "scripting" | "creator" | "archived">("all");
   useEffect(() => {
     const source = canManageAll
       ? collection(db, "contentItems")
@@ -1637,11 +1635,11 @@ function ContentWorkspace({
   };
   const contentStats = useMemo(
     () => ({
-      all: items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status)).length,
-      pending: items.filter((i) => ["idea_pending", "script_review_creator"].includes(i.status)).length,
-      approved: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
-      scripting: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
-      archived: items.filter((i) => ["archived", "ready_to_publish", "published"].includes(i.status)).length,
+  all: items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status)).length,
+  pending: items.filter((i) => i.status === "idea_pending").length,
+  scripting: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
+  creator: items.filter((i) => i.status === "script_review_creator").length,
+  archived: items.filter((i) => i.status === "published").length,
     }),
     [items],
   );
@@ -1652,13 +1650,13 @@ function ContentWorkspace({
       ? items.filter((i) => ["archived", "ready_to_publish", "published"].includes(i.status))
       : items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status));
     const filtered =
-      contentFilter === "all" || contentFilter === "archived"
-        ? base
-        : contentFilter === "pending"
-          ? base.filter((i) => ["idea_pending", "script_review_creator"].includes(i.status))
-          : contentFilter === "approved"
-            ? base.filter((i) => ["scripting", "script_rejected"].includes(i.status))
-            : base.filter((i) => ["scripting", "script_rejected"].includes(i.status));
+  contentFilter === "all" || contentFilter === "archived"
+  ? base
+  : contentFilter === "pending"
+  ? base.filter((i) => i.status === "idea_pending")
+  : contentFilter === "scripting"
+  ? base.filter((i) => ["scripting", "script_rejected"].includes(i.status))
+  : base.filter((i) => i.status === "script_review_creator");
     return [...filtered].sort((a, b) => {
       const rejectedPriority = (status: Status) => status === "script_rejected" ? 0 : 1;
       return rejectedPriority(a.status) - rejectedPriority(b.status) ||
@@ -1779,26 +1777,10 @@ function ContentWorkspace({
       await deleteDoc(doc(db, "contentItems", item.id));
   };
   const statCards = [
-    {
-      key: "pending" as const,
-      label: "Chờ duyệt",
-      value: contentStats.pending,
-    },
-    {
-      key: "approved" as const,
-      label: "Chờ lên kịch bản / Cần sửa KB",
-      value: contentStats.approved,
-    },
-    {
-      key: "scripting" as const,
-      label: "Chờ lên kịch bản",
-      value: contentStats.scripting,
-    },
-    {
-      key: "archived" as const,
-      label: "Kho lưu trữ",
-      value: contentStats.archived,
-    },
+  { key: "pending" as const, label: "CHỜ LEAD DUYỆT YT", value: contentStats.pending },
+  { key: "scripting" as const, label: "CẦN VIẾT / SỬA KỊCH BẢN", value: contentStats.scripting },
+  { key: "creator" as const, label: "KỊCH BẢN CHỜ CREATOR DUYỆT", value: contentStats.creator },
+  { key: "archived" as const, label: "KHO LƯU TRỮ (ĐÃ HOÀN THÀNH)", value: contentStats.archived },
   ];
   const formatDate = (value: unknown) => {
     const timestamp = itemTime(value);
@@ -1977,7 +1959,7 @@ function ContentWorkspace({
             ))
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              Chưa có nội dung �� trạng thái này.
+              Chưa có nội dung ở trạng thái này.
             </div>
           )}
         </div>
@@ -2186,7 +2168,7 @@ function IdeaVault({
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea ph�� hợp.</div>
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea phù hợp.</div>
       )}
     </section>
   );
@@ -2196,7 +2178,7 @@ type VideoKind = "ref" | "source" | "final" | "published";
 const videoKinds: Record<VideoKind, { icon: string; label: string }> = {
   ref: { icon: "📌", label: "VIDEO THAM KHẢO (REF)" },
   source: { icon: "🎬", label: "VIDEO SOURCE DỰNG (FILE GỐC)" },
-  final: { icon: "✂️", label: "VIDEO B���N DỰNG HOÀN CHỈNH" },
+  final: { icon: "✂️", label: "VIDEO BẢN DỰNG HOÀN CHỈNH" },
   published: { icon: "🚀", label: "VIDEO BÀI ĐĂNG THỰC TẾ" },
 };
 const isVideoUrl = (value?: string) =>
@@ -2388,7 +2370,7 @@ function CreativeAssistant({
     lead: {
       title: "AI Cố Vấn Chiến Lược & Quản Lý",
       quick: [
-        "Phân tích hiệu su��t tu��n",
+        "Phân tích hiệu suất tuần",
         "Viết nhận xét yêu cầu sửa bài",
         "Đề xuất chiến lược tháng tới",
         "Đánh giá KPI team",
@@ -2846,7 +2828,7 @@ function ScriptEditor({
         no: 2,
         shot: "Cận chất liệu và chi tiết phụ kiện",
         angle: "Close-up chuyển động",
-        voice: "Điểm nhấn n���m ở chất liệu và phom dáng.",
+        voice: "Điểm nhấn nằm ở chất liệu và phom dáng.",
         text: "DETAILS MATTER",
       },
       {
@@ -2869,7 +2851,7 @@ function ScriptEditor({
   <StageProgress status={item.status} />
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
-                <strong>Feedback t��� Lead:</strong>
+                <strong>Feedback từ Lead:</strong>
                 <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
               </div>
             )}
@@ -2905,7 +2887,7 @@ function ScriptEditor({
             className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700"
           >
             <Sparkles className="size-4" />
-            AI gợi ý kịch b��n
+            AI gợi ý kịch bản
           </button>
         </div>
         <div className="mt-3 flex flex-col gap-3">
@@ -3429,10 +3411,10 @@ function CreatorWorkspace({
                     </span>
                   ))}
                   <p className="w-full text-xs text-muted-foreground">
-                    Đ��ng dự kiến:{" "}
+                    Đăng dự kiến:{" "}
                     {item.scheduledAt
                       ? new Date(item.scheduledAt).toLocaleString("vi-VN")
-                      : "���"}
+                      : "Chưa cập nhật"}
                   </p>
                 </div>
                 <div>
@@ -4281,7 +4263,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
         </button>
         <section
-          aria-label="Dọn d���p dữ liệu test"
+          aria-label="Dọn dẹp dữ liệu test"
           className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
         >
           <div className="flex items-start gap-3">
@@ -4356,7 +4338,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           ],
           ["Đã đăng tháng này", published.length, Check],
           [
-            "Tr�� deadline",
+            "Trễ deadline",
             items.filter(
               (i) =>
                 i.scheduledAt &&
@@ -4831,7 +4813,7 @@ function LeadWorkspace({
       ? archived
       : view === "Duyệt content"
         ? pendingIdeas
-        : view === "Duy���t video"
+        : view === "Duyệt video"
           ? pendingVideos
           : view === "Tổng quan"
             ? items
@@ -5090,7 +5072,7 @@ function LeadWorkspace({
           </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                    <button type="button" onClick={() => setSelected(item)} className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">M��� chi tiết</button>
+                    <button type="button" onClick={() => setSelected(item)} className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">Mở chi tiết</button>
                     {(item.reference || item.finalVideoLink || item.publishedLink) && <a href={item.reference || item.finalVideoLink || item.publishedLink} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-border px-3 py-2 text-xs font-medium">Mở link gốc</a>}
                   </div>
                 </article>
