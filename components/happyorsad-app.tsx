@@ -683,6 +683,7 @@ function RoleDrawer({
           ["Duyệt content", FileCheck2, "Duyệt Ý tưởng / Content"],
           ["Duyệt video", Video, "Duyệt Video"],
           ["Kho lưu trữ", Archive, "Kho lưu trữ"],
+          ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
           [
             "Cấu hình hệ thống",
             Settings,
@@ -697,6 +698,7 @@ function RoleDrawer({
               "Tổng quan Content Workspace",
             ],
             ["Kho Lưu Trữ", Archive, "Kho Lưu Trữ Ý Tưởng"],
+            ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
             ["Feedback & Trao Đổi", MessageCircle, "Feedback & Yêu cầu sửa"],
           ]
         : ([
@@ -705,6 +707,7 @@ function RoleDrawer({
               LayoutDashboard,
               "Lịch Quay & Dựng Video",
             ],
+            ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
             [
               "Cần Feedback / Sửa Video",
               AlertCircle,
