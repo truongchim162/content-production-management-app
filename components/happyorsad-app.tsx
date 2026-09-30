@@ -503,14 +503,37 @@ function NotificationCenter({
     );
     return unsubscribe;
   }, [user.uid]);
-  const visibleItems = user.role === "content"
-    ? items.filter((item) => {
-  const text = `${item.title} ${item.message} ${item.targetView || ""}`.toLowerCase();
-  const isVideoOrSchedule = text.includes("video") || text.includes("creator") || text.includes("quá hạn") || text.includes("lịch quay") || text.includes("dựng video");
-  const isContentWorkflow = text.includes("content") || text.includes("kịch bản") || text.includes("kịch bản") || text.includes("ý tưởng") || text.includes("phản hồi") || text.includes("sửa bài");
-  return !isVideoOrSchedule && (item.status === "script_pending" || item.status === "idea_needs_revision" || item.type === "feedback" || isContentWorkflow);
-      })
-    : items;
+  const visibleItems = items.filter((item) => {
+    const text = `${item.title} ${item.message} ${item.targetView || ""}`.toLowerCase();
+    if (user.role === "lead") {
+      return (
+        text.includes("content") ||
+        text.includes("ý tưởng") ||
+        text.includes("sửa lại") ||
+        text.includes("video") ||
+        text.includes("creator") ||
+        item.status === "idea_pending" ||
+        item.status === "idea_needs_revision" ||
+        item.status === "video_pending" ||
+        item.targetView === "Duyệt content" ||
+        item.targetView === "Duyệt video"
+      );
+    }
+    if (user.role === "creator") {
+      return (
+        text.includes("kịch bản") ||
+        text.includes("video") ||
+        text.includes("feedback") ||
+        text.includes("chỉnh sửa") ||
+        text.includes("quá hạn") ||
+        item.status === "script_pending_creator" ||
+        item.status === "video_needs_revision" ||
+        item.targetView === "Duyệt kịch bản" ||
+        item.targetView === "Sân dựng video"
+      );
+    }
+    return true;
+  });
   const unread = visibleItems.filter((item) => !item.isRead).length;
   const markRead = async (item: NotificationItem) => {
     if (!item.isRead)
@@ -1713,8 +1736,8 @@ function ContentWorkspace({
       await notifyRole(
         "creator",
         {
-          title: "Kịch bản mới chờ duyệt",
-          message: `Content vừa gửi kịch bản '${item.title}' chờ bạn duyệt đi quay.`,
+          title: "Kịch bản đã được Lead duyệt",
+          message: `Kịch bản '${item.title}' đã được Lead duyệt, sẵn sàng quay/dựng.`,
           type: "status_change",
           linkId: item.id,
           targetView: "Duyệt kịch bản",
@@ -2083,6 +2106,17 @@ function VideoSet({ item }: { item: Item }) {
   );
 }
 
+function formatDateTime(value: unknown) {
+  const timestamp = publishedTime(value);
+  if (!timestamp) return "Chưa có thời gian";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
 function ActivityTimeline({ history }: { history?: HistoryEntry[] }) {
   const entries = [...(history || [])].reverse();
   return (
@@ -2093,7 +2127,9 @@ function ActivityTimeline({ history }: { history?: HistoryEntry[] }) {
           {entries.map((entry, index) => (
             <li key={`${entry.id || entry.action}-${index}`} className="relative pb-4 last:pb-0">
               <span className="absolute -left-[21px] top-1 size-2.5 rounded-full bg-orange-500 ring-4 ring-background" />
-              <p className="text-xs text-muted-foreground">{relativeTime(entry.createdAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                {relativeTime(entry.createdAt)} · {formatDateTime(entry.createdAt)}
+              </p>
               <p className="mt-1 text-sm"><strong>{entry.actorName}</strong> {entry.action}</p>
               {entry.note && <p className="mt-1 text-xs text-muted-foreground">“{entry.note}”</p>}
             </li>
