@@ -143,6 +143,9 @@ type NotificationItem = {
   type: "status_change" | "feedback" | "chat";
   linkId?: string;
   targetView?: string;
+  postId?: string;
+  ideaId?: string;
+  status?: Status;
   videoLink?: string;
   isRead: boolean;
   createdAt?: { toDate?: () => Date } | null;
@@ -465,16 +468,24 @@ function NotificationCenter({
     );
     return unsubscribe;
   }, [user.uid]);
-  const unread = items.filter((item) => !item.isRead).length;
+  const visibleItems = user.role === "content"
+    ? items.filter((item) => {
+  const text = `${item.title} ${item.message} ${item.targetView || ""}`.toLowerCase();
+  const isVideoOrSchedule = text.includes("video") || text.includes("creator") || text.includes("quá hạn") || text.includes("lịch quay") || text.includes("dựng video");
+  const isContentWorkflow = text.includes("content") || text.includes("kịch bản") || text.includes("kịch bản") || text.includes("ý tưởng") || text.includes("phản hồi") || text.includes("sửa bài");
+  return !isVideoOrSchedule && (item.status === "script_pending" || item.status === "idea_needs_revision" || item.type === "feedback" || isContentWorkflow);
+      })
+    : items;
+  const unread = visibleItems.filter((item) => !item.isRead).length;
   const markRead = async (item: NotificationItem) => {
     if (!item.isRead)
       await updateDoc(doc(db, "notifications", item.id), { isRead: true });
     setOpen(false);
-    onNavigate(item.linkId, item.targetView);
+    onNavigate(item.linkId || item.postId || item.ideaId, item.targetView);
   };
   const markAll = async () => {
     await Promise.all(
-      items
+      visibleItems
         .filter((item) => !item.isRead)
         .map((item) =>
           updateDoc(doc(db, "notifications", item.id), { isRead: true }),
@@ -505,8 +516,8 @@ function NotificationCenter({
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {items.length ? (
-                items.map((item) => (
+              {visibleItems.length ? (
+                visibleItems.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => markRead(item)}
@@ -776,7 +787,7 @@ function Workspace({
                   (role === "creator"
                     ? "Cần Feedback / Sửa Video"
                     : role === "content"
-                      ? "Tất c�� Content / Viết Kịch Bản"
+                      ? "Tất cả Content / Viết Kịch Bản"
                       : "Duyệt video"),
               );
             }}
@@ -868,6 +879,7 @@ function Workspace({
               user={user}
               view={view}
               canManageAll={role === "lead"}
+              openItemId={openItemId}
             />
           ) : role === "creator" ||
             (role === "lead" &&
@@ -1414,10 +1426,12 @@ function ContentWorkspace({
   user,
   view,
   canManageAll = false,
+  openItemId,
 }: {
   user: User;
   view: string;
   canManageAll?: boolean;
+  openItemId?: string;
 }) {
   const [items, setItems] = useState<Item[]>(demoItems);
   const [selected, setSelected] = useState<Item | null>(null);
@@ -1451,6 +1465,11 @@ function ContentWorkspace({
       () => undefined,
     );
   }, [user.uid, canManageAll]);
+  useEffect(() => {
+    if (!openItemId) return;
+    const match = items.find((item) => item.id === openItemId);
+    if (match) setSelected(match);
+  }, [openItemId, items]);
   useEffect(
     () =>
       onSnapshot(
@@ -2623,7 +2642,7 @@ function ScriptEditor({
             label="Bối cảnh"
             value={location}
             onChange={setLocation}
-            placeholder="Studio / đường ph��..."
+            placeholder="Studio / đường phố..."
           />
           <Field
             label="Trang phục"
@@ -2998,7 +3017,7 @@ function CreatorWorkspace({
             </label>
           )}
           <p className="mt-2 text-sm text-muted-foreground">
-            Tiếp nhận k���ch bản, tối ưu lịch quay và bàn giao bản dựng.
+            Tiếp nhận kịch bản, tối ưu lịch quay và bàn giao bản dựng.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -3521,7 +3540,7 @@ function CreatorEditor({
             <button
               type="button"
               onClick={handleSubmitForReview}
-              aria-label="G���i video cho Lead duyệt"
+              aria-label="Gửi video cho Lead duyệt"
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
             >
               <Send className="size-4" />
@@ -3681,7 +3700,7 @@ function TaskChat({
           value={text}
           onChange={(event) => setText(event.target.value)}
           aria-label="Gửi feedback"
-          placeholder="Viết phản hồi hoặc d��n link..."
+          placeholder="Viết phản hồi hoặc dán link..."
           className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-xs"
         />
         <button
@@ -3694,7 +3713,7 @@ function TaskChat({
       </form>
       {item.id.startsWith("demo-") && (
         <p className="mt-2 text-[10px] text-muted-foreground">
-          Trao đổi realtime khả dụng sau khi bài ��ư���c lưu vào Firestore.
+          Trao đổi realtime khả dụng sau khi bài được lưu vào Firestore.
         </p>
       )}
     </div>
@@ -3737,7 +3756,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
   const [settings, setSettings] = useState({
     platforms: platformOptions,
     contentTypes,
-    goals: ["Tăng tương tác", "Chuyển đ���i", "Branding"],
+    goals: ["Tăng tương tác", "Chuyển đổi", "Branding"],
     overdueHours: 24,
   });
   const [kpis, setKpis] = useState<Record<string, number>>({
@@ -3796,7 +3815,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     if (
       cleanupBusy ||
       !window.confirm(
-        "Xác nhận dọn sạch tất cả ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống, tài khoản và phân quyền s��� được giữ nguyên.",
+        "Xác nhận dọn sạch tất cả ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống, tài khoản và phân quyền sẽ được giữ nguyên.",
       )
     )
       return;
@@ -4146,7 +4165,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
       {selected && (
         <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4">
           <section className="w-full max-w-md rounded-2xl bg-card p-5">
-            <h2 className="font-semibold">Ph����n hồi Lead</h2>
+            <h2 className="font-semibold">Phản hồi Lead</h2>
             <textarea
               autoFocus
               value={note}
@@ -4322,7 +4341,7 @@ function LeadWorkspace({
       if (item.ownerId && patch.status === "rejected")
         await notifyUser(item.ownerId, {
           title: "Content/Video bị từ chối",
-          message: `❌ '${item.title}' đã bị t��� chối. Lý do: ${patch.feedback || patch.leadNote || "Vui lòng xem feedback của Lead."}`,
+          message: `❌ '${item.title}' đã bị từ chối. Lý do: ${patch.feedback || patch.leadNote || "Vui lòng xem feedback của Lead."}`,
           type: "feedback",
           linkId: item.id,
           targetView:
@@ -4476,7 +4495,7 @@ function LeadWorkspace({
         <h1 className="mt-1 text-2xl font-semibold">Dashboard thống kê</h1>
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <Chart
-            title="Phân bổ k��nh đăng bài"
+            title="Phân bổ kênh đăng bài"
             values={settings.platforms.map(
               (name) =>
                 [
@@ -4809,12 +4828,12 @@ function LeadWorkspace({
                           <h3 className="mt-1 font-medium">{item.title}</h3>
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                             <span className="rounded-full bg-accent px-2 py-1">
-                              {item.contentType || "Ch��a phân loại"}
+                              {item.contentType || "Chưa phân loại"}
                             </span>
                             <span className="rounded-full bg-accent px-2 py-1">
                               {item.ownerId
                                 ? "Content/Creator"
-                                : "Chưa gán ng��ời tạo"}
+                                : "Chưa gán người tạo"}
                             </span>
                             <span className="rounded-full bg-accent px-2 py-1">
                               {item.createdAt ? "Đã gửi" : "Chưa có ngày gửi"}
@@ -4922,7 +4941,7 @@ function LeadWorkspace({
                 onClick={() => void submitFeedback()}
                 className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground disabled:opacity-50"
               >
-                Xác nh��n Gửi
+                Xác nhận Gửi
               </button>
             </div>
           </section>
