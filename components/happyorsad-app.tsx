@@ -87,6 +87,8 @@ type Status =
   | "shooting_done"
   | "video_pending"
   | "editing_done"
+  | "video_approved"
+  | "video_approved_pending_schedule"
   | "ready_to_post"
   | "published"
   | "archived"
@@ -131,6 +133,8 @@ type Item = {
   sourceLink?: string;
   shootNote?: string;
   scheduledAt?: string;
+  scheduledPublishDate?: string;
+  wasOverdue?: boolean;
   overdueNotifiedAt?: unknown;
   finalVideoLink?: string;
   caption?: string;
@@ -206,13 +210,15 @@ const statusLabels: Record<Status, string> = {
   video_resubmission: "Nộp lại video",
   script_pending: "Chờ duyệt kịch bản",
   script_pending_creator: "Creator chờ duyệt kịch bản",
-  script_approved: "Kịch bản đã duyệt",
+  script_approved: "Chờ quay/dựng",
   scripting: "Đang viết kịch bản",
   shooting_pending: "Chờ quay",
   shooting_done: "Đã quay",
   video_pending: "Video chờ duyệt",
   editing_done: "Chờ duyệt video",
-  ready_to_post: "Sẵn sàng đăng",
+  video_approved: "Bài đã duyệt",
+  video_approved_pending_schedule: "Bài đã duyệt",
+  ready_to_post: "Bài sẵn sàng đăng",
   published: "Đã đăng",
   archived: "Kho lưu trữ",
   rejected: "Đã từ chối",
@@ -237,6 +243,11 @@ const platformOptions = [
   "Instagram Reels",
   "Facebook Reels",
 ];
+const isPastPublishDeadline = (item: Item) => {
+  const value = item.scheduledPublishDate || item.scheduledAt;
+  return item.status !== "published" && !!value && new Date(value).getTime() < Date.now();
+};
+
 const formatCardDate = (value: unknown) => {
   const timestamp = publishedTime(value);
   return timestamp
@@ -682,6 +693,12 @@ function RoleDrawer({
           ["Dashboard thống kê", BarChart3, "Dashboard thống kê & KPI"],
           ["Duyệt content", FileCheck2, "Duyệt Ý tưởng / Content"],
           ["Duyệt video", Video, "Duyệt Video"],
+          ["Ý tưởng chờ duyệt", Lightbulb, "Ý tưởng chờ duyệt"],
+          ["Chờ quay/dựng", Video, "Chờ quay/dựng"],
+          ["Bài đã duyệt", CheckCircle2, "Bài đã duyệt"],
+          ["Bài sẵn sàng đăng", Send, "Bài sẵn sàng đăng"],
+          ["Bài đã đăng", CheckSquare, "Bài đã đăng"],
+          ["Trễ deadline", AlertCircle, "Trễ deadline"],
           ["Kho lưu trữ", Archive, "Kho lưu trữ"],
           ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
           [
@@ -2321,7 +2338,7 @@ function CreativeAssistant({
     lead: {
       title: "AI Cố Vấn Chiến Lược & Quản Lý",
       quick: [
-        "Phân tích hiệu suất tuần",
+        "Phân tích hiệu su��t tuần",
         "Viết nhận xét yêu cầu sửa bài",
         "Đề xuất chiến lược tháng tới",
         "Đánh giá KPI team",
@@ -4328,9 +4345,10 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <span className="text-[10px] uppercase tracking-wider text-orange-500">
-                    {statusLabels[item.status]}
-                  </span>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span>
+                    {isPastPublishDeadline(item) && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Trễ deadline</span>}
+                  </div>
                   <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
                   <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
                     <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
@@ -4503,8 +4521,8 @@ function LeadWorkspace({
       (item) =>
         item.ownerId &&
         item.status !== "published" &&
-        item.scheduledAt &&
-        new Date(item.scheduledAt).getTime() < Date.now() &&
+        (item.scheduledPublishDate || item.scheduledAt) &&
+        new Date(item.scheduledPublishDate || item.scheduledAt!).getTime() < Date.now() &&
         !item.overdueNotifiedAt,
     );
     if (!overdueItems.length) return;
@@ -4567,7 +4585,12 @@ function LeadWorkspace({
     }
   }, [openItemId, items]);
   const persist = async (item: Item, patch: Partial<Item>) => {
+    const publishDate = item.scheduledPublishDate || item.scheduledAt;
+    const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
     const nextPatch =
+      patch.status === "published" && wasOverdue
+        ? { ...patch, status: "published" as Status, wasOverdue: true }
+        :
       patch.status === "approved_idea" && item.status === "script_pending"
         ? { ...patch, status: "script_approved" as Status }
         : patch;
@@ -4723,15 +4746,22 @@ function LeadWorkspace({
     ["archived", "needs_revision"].includes(i.status),
   );
   const published = items.filter((i) => i.status === "published");
-  const overdue = items.filter(
-    (i) =>
-      i.scheduledAt &&
-      new Date(i.scheduledAt).getTime() < Date.now() &&
-      i.status !== "published" &&
-      i.status !== "archived",
-  );
+  const overdue = items.filter((i) => {
+    const publishDate = i.scheduledPublishDate || i.scheduledAt;
+    return !!publishDate && new Date(publishDate).getTime() < Date.now() && i.status !== "published" && i.status !== "archived";
+  });
+  const leadWorkflow = {
+    "Ý tưởng chờ duyệt": pendingIdeas,
+    "Chờ quay/dựng": items.filter((i) => i.status === "script_approved"),
+    "Bài đã duyệt": items.filter((i) => ["video_approved", "editing_done"].includes(i.status)),
+    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_post"),
+    "Bài đã đăng": published,
+    "Trễ deadline": overdue,
+  };
   const cards =
-    view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
+    view in leadWorkflow
+      ? leadWorkflow[view as keyof typeof leadWorkflow]
+      : view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
       ? archived
       : view === "Duyệt content"
         ? pendingIdeas
