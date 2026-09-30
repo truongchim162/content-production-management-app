@@ -122,6 +122,8 @@ type Item = {
   ownerId?: string;
   createdAt?: unknown;
   approvedAt?: unknown;
+  scriptApprovedAt?: unknown;
+  productName?: string;
   source?: string;
   editNote?: string;
   sourceLink?: string;
@@ -3177,7 +3179,7 @@ function CreatorWorkspace({
             Send,
           ],
           [
-            "Cần sửa theo Feedback",
+            "Cần s��a theo Feedback",
             "revision",
             items.filter((i) => i.status === "needs_revision"),
             AlertTriangle,
@@ -3237,6 +3239,7 @@ function CreatorWorkspace({
                   <p className="mt-2 text-sm font-medium">
                     {item.caption || item.title}
                   </p>
+                  <ItemMetadata item={item} />
                 </div>
                 <div className="flex flex-wrap content-start gap-2">
                   {(item.platforms || []).map((platform) => (
@@ -3301,6 +3304,16 @@ function CreatorWorkspace({
   );
 }
 
+function ItemMetadata({ item }: { item: Item }) {
+  return (
+    <div className="my-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-stone-500">
+      <span>Sản phẩm: {item.productName || item.contentType || "Khác"}</span>
+      <span>Tạo: {formatDate(item.createdAt)}</span>
+      <span>Duyệt: {formatDate(item.scriptApprovedAt || item.approvedAt)}</span>
+    </div>
+  );
+}
+
 function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
   const overdue =
     !!item.scheduledAt &&
@@ -3337,6 +3350,7 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
             {item.location || "Chưa có bối cảnh"} ·{" "}
             {item.outfit || "Chưa có outfit"}
           </p>
+          <ItemMetadata item={item} />
           {item.status === "published" && (
             <div className="mt-3 rounded-lg bg-stone-50 p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
@@ -4217,6 +4231,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {item.caption || item.description || "Chưa có mô tả."}
                   </p>
+                  <ItemMetadata item={item} />
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {item.status === "idea_pending" && (
@@ -4829,6 +4844,7 @@ function LeadWorkspace({
                       <p className="mt-1 w-full break-words overflow-hidden text-xs text-muted-foreground">
                         {item.description || item.caption || "Chưa có mô tả."}
                       </p>
+                      <ItemMetadata item={item} />
                       <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                         <span className="rounded-full bg-accent px-2 py-1">
                           {item.contentType || "Chưa phân loại"}
@@ -4957,6 +4973,7 @@ function LeadWorkspace({
                             {statusLabels[item.status]}
                           </span>
                           <h3 className="mt-1 font-medium">{item.title}</h3>
+                          <ItemMetadata item={item} />
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                             <span className="rounded-full bg-accent px-2 py-1">
                               {item.contentType || "Chưa phân loại"}
