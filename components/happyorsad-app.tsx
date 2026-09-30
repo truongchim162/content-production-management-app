@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   EmailAuthProvider,
   onAuthStateChanged,
@@ -1685,6 +1685,36 @@ function ContentWorkspace({
         }).format(timestamp)
       : "Chưa cập nhật";
   };
+  if (view === "Kho Lưu Trữ")
+    return (
+      <IdeaVault
+        items={items.filter((item) => item.status === "archived")}
+        contentTypes={settings.contentTypes}
+        onCreate={() => setShowForm(true)}
+        onEdit={setSelected}
+        onDelete={removeItem}
+        onPromote={(item) => updateItem(item, { status: "idea_pending" })}
+      >
+        {showForm && (
+          <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/45 p-4">
+            <div className="w-full max-w-2xl">
+              <IdeaForm
+                contentTypes={settings.contentTypes}
+                goals={settings.goals}
+                platforms={settings.platforms}
+                initial={ideaDraft}
+                saving={saving}
+                onCancel={() => {
+                  setShowForm(false);
+                  setIdeaDraft(undefined);
+                }}
+                onSubmit={createIdea}
+              />
+            </div>
+          </div>
+        )}
+      </IdeaVault>
+    );
   return (
     <>
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1844,6 +1874,99 @@ function ContentWorkspace({
             />
           ))}
     </>
+  );
+}
+
+function IdeaVault({
+  items,
+  contentTypes: availableTypes,
+  onCreate,
+  onEdit,
+  onDelete,
+  onPromote,
+  children,
+}: {
+  items: Item[];
+  contentTypes: string[];
+  onCreate: () => void;
+  onEdit: (item: Item) => void;
+  onDelete: (item: Item) => void;
+  onPromote: (item: Item) => void;
+  children?: ReactNode;
+}) {
+  const [queryText, setQueryText] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const filtered = items.filter((item) => {
+    const haystack = `${item.title} ${item.description || ""}`.toLowerCase();
+    return (
+      haystack.includes(queryText.toLowerCase().trim()) &&
+      (typeFilter === "all" || item.contentType === typeFilter)
+    );
+  });
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-orange-500">Idea vault</p>
+          <h1 className="mt-1 text-2xl font-bold text-zinc-900">Kho ý tưởng</h1>
+          <p className="mt-2 text-sm text-zinc-600">Lưu trữ và tra cứu các video tham khảo cho Content.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          Thêm vào kho idea
+        </button>
+      </div>
+      <div className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-3 shadow-sm sm:flex-row">
+        <input
+          value={queryText}
+          onChange={(event) => setQueryText(event.target.value)}
+          placeholder="Tìm theo tiêu đề hoặc ghi chú..."
+          aria-label="Tìm kiếm trong kho ý tưởng"
+          className="h-10 min-w-0 flex-1 rounded-lg border border-stone-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-orange-400"
+        />
+        <select
+          value={typeFilter}
+          onChange={(event) => setTypeFilter(event.target.value)}
+          aria-label="Lọc dạng content"
+          className="h-10 rounded-lg border border-stone-200 bg-white px-3 text-sm text-zinc-900"
+        >
+          <option value="all">Tất cả dạng content</option>
+          {availableTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+      </div>
+      {children}
+      {filtered.length ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+          {filtered.map((item) => (
+            <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+              <div className="relative aspect-[9/16] w-full overflow-hidden bg-zinc-100">
+                {item.reference ? (
+                  <VideoPreview url={item.reference} kind="ref" title={item.title} />
+                ) : (
+                  <div className="grid size-full place-items-center p-3 text-center text-xs text-zinc-500">Chưa có video tham khảo</div>
+                )}
+              </div>
+              <div className="p-2.5">
+                <h2 className="line-clamp-1 text-xs font-semibold text-zinc-900" title={item.title}>{item.title}</h2>
+                <p className="mt-1 line-clamp-2 text-[10px] font-medium text-zinc-600">{item.description || "Chưa có ghi chú."}</p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <button type="button" onClick={() => onPromote(item)} className="rounded-md bg-zinc-900 px-2 py-1 text-[10px] font-medium text-white">Lấy làm idea chính</button>
+                  {item.reference && <a href={item.reference} target="_blank" rel="noreferrer" className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Mở link</a>}
+                  <button type="button" onClick={() => onEdit(item)} className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Sửa</button>
+                  <button type="button" onClick={() => onDelete(item)} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">Xóa</button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea phù hợp.</div>
+      )}
+    </section>
   );
 }
 
