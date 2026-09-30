@@ -108,6 +108,13 @@ type Shot = {
   voice: string;
   text: string;
 };
+type FeedbackHistoryEntry = {
+  stage: "idea" | "script" | "video";
+  author: string;
+  content: string;
+  createdAt: string;
+};
+
 type HistoryEntry = {
   id?: string;
   action: string;
@@ -155,6 +162,7 @@ type Item = {
   feedback?: string;
   feedbackUnread?: number;
   history?: HistoryEntry[];
+  feedbackHistory?: FeedbackHistoryEntry[];
 };
 type TaskMessage = {
   id: string;
@@ -1774,25 +1782,21 @@ function ContentWorkspace({
     }
   };
   const updateItem = async (item: Item, patch: Partial<Item>) => {
-    const editingScript = Boolean(
-      patch.shots || patch.location || patch.outfit || patch.props,
-    );
-    const revisingIdea =
-      ["idea_pending", "idea_needs_revision"].includes(item.status) &&
-      Boolean(
-        patch.title ||
-        patch.description ||
-        patch.reference ||
-        patch.contentType ||
-        patch.goal ||
-        patch.platforms,
-      );
-    if (editingScript && !["approved_idea"].includes(item.status)) return;
-    const nextPatch = revisingIdea
-      ? { ...patch, status: "idea_pending" as Status }
-      : item.status === "approved_idea" && editingScript
-        ? { ...patch, status: "script_review_creator" as Status }
-        : patch;
+    const nextPatch = patch;
+    if (nextPatch.status && nextPatch.status !== item.status) {
+      const transition = `${item.status}->${nextPatch.status}`;
+      const allowedTransitions: Record<UserRole, string[]> = {
+        lead: ["idea_pending->scripting", "idea_pending->idea_rejected", "script_review_creator->script_rejected", "video_pending_lead->video_rejected", "video_pending_lead->ready_to_publish", "video_pending->video_rejected", "editing_done->video_rejected", "editing_done->ready_to_publish"],
+        content: ["idea_rejected->idea_pending", "idea_needs_revision->idea_pending", "script_rejected->script_review_creator", "needs_revision->script_review_creator"],
+        creator: ["script_review_creator->waiting_production", "waiting_production->video_pending_lead", "video_rejected->video_pending_lead", "ready_to_publish->published", "ready_to_post->published"],
+      };
+      if (!allowedTransitions[role].includes(transition)) return;
+    }
+    const feedbackStage = item.status.includes("idea") ? "idea" : item.status.includes("script") || item.status === "scripting" || item.status === "needs_revision" ? "script" : "video";
+    const feedbackContent = String(nextPatch.feedback || nextPatch.ideaFeedback || nextPatch.scriptFeedback || nextPatch.videoFeedback || "").trim();
+    const feedbackHistory = feedbackContent && ["idea_rejected", "script_rejected", "video_rejected", "idea_needs_revision", "needs_revision", "video_needs_revision"].includes(String(nextPatch.status))
+      ? [...(item.feedbackHistory || []), { stage: feedbackStage as FeedbackHistoryEntry["stage"], author: user.displayName || user.email || "Thành viên", content: feedbackContent, createdAt: new Date().toISOString() }]
+      : item.feedbackHistory || [];
     const historyEntry: HistoryEntry = {
       action: activityAction(item.status, nextPatch.status),
       actorName: user.displayName || user.email || "Thành viên",
@@ -1801,6 +1805,7 @@ function ContentWorkspace({
     };
     const patchWithHistory = {
       ...nextPatch,
+      feedbackHistory,
       history: [...(item.history || []), historyEntry],
     };
     setItems((all) =>
@@ -2107,7 +2112,7 @@ function StageDetailEditor({
       {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <a href={item.finalVideoLink} target="_blank" rel="noreferrer" className="rounded-lg border p-3 text-sm text-blue-700 underline">Mở video dựng</a>}{field("Feedback / Góp ý của Lead", "leadNote", "Nhập góp ý")}</div>}
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
-      {item.history?.length ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.history.filter((entry) => entry.note).map((entry, index) => <p key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
+      {(item.feedbackHistory?.length || item.history?.length) ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.feedbackHistory?.map((entry, index) => <div key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><div className="flex items-center justify-between gap-2"><strong>{entry.author}</strong><span className="text-muted-foreground">{entry.stage === "idea" ? "Ý tưởng" : entry.stage === "script" ? "Kịch bản" : "Video"} · {new Date(entry.createdAt).toLocaleString("vi-VN")}</span></div><p className="mt-1 whitespace-pre-wrap">{entry.content}</p></div>)}{item.history?.filter((entry) => entry.note).map((entry, index) => <p key={`legacy-${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
     </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => { if (window.confirm("Bạn có chắc chắn muốn xóa bài viết này?")) onDelete(); }} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer></section></div>;
 }
 
@@ -3346,7 +3351,7 @@ function CreatorWorkspace({
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
         {[
           [
-            "Kịch bản chờ duyệt",
+            "Kịch b��n chờ duyệt",
             "script",
             items.filter((i) => i.status === "script_pending_creator"),
             FileText,
