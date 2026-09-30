@@ -1084,62 +1084,6 @@ function Workspace({
   );
 }
 
-function ProfileMenu({
-  user,
-  role,
-  onLogout,
-  onClose,
-}: {
-  user: User;
-  role: UserRole;
-  onLogout: () => void;
-  onClose: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [confirmLogout, setConfirmLogout] = useState(false);
-  return (
-    <>
-      {
-        <div className="absolute right-0 top-12 z-30 w-56 rounded-xl border border-border bg-card p-2 shadow-lg">
-          <button
-            onClick={() => setOpen(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"
-          >
-            <UserRound
-              className="size-4 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <span>
-              <b>Trang cá nhân</b>
-              <small className="mt-0.5 block text-muted-foreground">
-                {user.email}
-              </small>
-            </span>
-          </button>
-          <button
-            onClick={() => setConfirmLogout(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="size-4" />
-            Đăng xuất
-          </button>
-        </div>
-      }
-      <ConfirmDialogModal open={confirmLogout} title="Đăng xuất tài khoản?" description="Bạn sẽ được đưa về màn hình đăng nhập." confirmLabel="Đăng xuất" destructive onCancel={() => setConfirmLogout(false)} onConfirm={() => { setConfirmLogout(false); onLogout(); }} />
-      {open && (
-        <ProfileModal
-          user={user}
-          role={role}
-          onClose={() => {
-            setOpen(false);
-            onClose();
-          }}
-        />
-      )}
-    </>
-  );
-}
-
 function ProfileModal({
   user,
   role,
@@ -3300,29 +3244,31 @@ function CreatorWorkspace({
   });
   const allCreatorItems = items.filter((item) =>
     [
-      "script_pending_creator",
-      "script_approved",
-      "shooting_pending",
-      "shooting_done",
-      "editing_done",
-      "video_pending",
-      "needs_revision",
+      "script_review_creator",
+      "waiting_production",
+      "video_pending_lead",
       "video_rejected",
-      "ready_to_post",
+      "ready_to_publish",
+      "published",
     ].includes(item.status),
   );
   const creatorPriority = (item: Item) => ["script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
+  useEffect(() => {
+    if (!creatorFilter) return;
+    const timer = window.setTimeout(() => document.querySelector("[data-creator-results]")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    return () => window.clearTimeout(timer);
+  }, [creatorFilter]);
   const visible =
     creatorFilter === "script"
-      ? items.filter((item) => item.status === "script_pending_creator")
+      ? items.filter((item) => item.status === "script_review_creator")
       : creatorFilter === "shoot"
-        ? items.filter((item) => item.status === "script_approved")
+        ? items.filter((item) => item.status === "waiting_production")
         : creatorFilter === "video"
-          ? items.filter((item) => item.status === "video_pending")
+          ? items.filter((item) => item.status === "video_pending_lead")
           : creatorFilter === "revision"
-            ? items.filter((item) => item.status === "video_needs_revision")
+            ? items.filter((item) => item.status === "video_rejected")
             : creatorFilter === "ready"
-              ? items.filter((item) => item.status === "ready_to_post")
+              ? items.filter((item) => item.status === "ready_to_publish" )
               : creatorFilter === "published"
                 ? filteredPublishedItems
                 : creatorFilter === "overdue"
@@ -3392,33 +3338,33 @@ function CreatorWorkspace({
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
         {[
           [
-            "Kịch b��n chờ duyệt",
+            "Kịch bản chờ duyệt",
             "script",
-            items.filter((i) => i.status === "script_pending_creator"),
+            items.filter((i) => i.status === "script_review_creator"),
             FileText,
           ],
           [
             "Bài chờ quay / dựng",
             "shoot",
-            items.filter((i) => i.status === "script_approved"),
+            items.filter((i) => i.status === "waiting_production"),
             Film,
           ],
           [
             "Video chờ Lead duyệt",
             "video",
-            items.filter((i) => i.status === "video_pending"),
+            items.filter((i) => i.status === "video_pending_lead"),
             Send,
           ],
           [
-            "Cần s��a theo Feedback",
+            "Cần sửa theo Feedback",
             "revision",
-            items.filter((i) => i.status === "needs_revision"),
+            items.filter((i) => i.status === "video_rejected"),
             AlertTriangle,
           ],
           [
             "Video đã duyệt / sẵn sàng đăng",
             "ready",
-            items.filter((i) => i.status === "ready_to_post"),
+            items.filter((i) => i.status === "ready_to_publish"),
             Check,
           ],
           [
@@ -3453,6 +3399,7 @@ function CreatorWorkspace({
           </button>
         ))}
       </div>
+      <div data-creator-results>
       {view === "Lịch quay & dựng" ? <CreatorProductionDay items={items} onOpen={(item) => setSelected(item)} /> : view === "Danh sách bài đăng" ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           {publishedItems.length ? (
@@ -3531,6 +3478,7 @@ function CreatorWorkspace({
           onSave={(patch) => update(selected, patch)}
         />
       )}
+      </div>
     </>
   );
 }
@@ -4221,7 +4169,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     }
   };
   const pendingIdeas = items.filter((i) => i.status === "idea_pending");
-  const pendingScripts = items.filter((i) => i.status === "script_review_creator");
+  const pendingScripts = items.filter((i) => ["scripting", "script_review_creator", "waiting_production"].includes(i.status));
   const pendingVideos = items.filter((i) => i.status === "video_pending_lead");
   const archived = items.filter((i) => i.status === "archived");
   const leadPipelineStatuses: Status[] = ["idea_pending", "video_pending_lead", "ready_to_publish", "ready_to_post", "published"];
@@ -4390,19 +4338,17 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
             "Content đã duyệt",
             items.filter((i) =>
               [
-                "scripting",
-                "shooting_pending",
-                "shooting_done",
-                "editing_done",
-                "published",
-              ].includes(i.status),
+  "scripting",
+  "script_review_creator",
+  "waiting_production",
+  ].includes(i.status),
             ).length,
             Check,
           ],
           [
             "Video chưa đăng",
             items.filter((i) =>
-              ["shooting_pending", "shooting_done", "editing_done"].includes(
+              ["ready_to_publish"].includes(
                 i.status,
               ),
             ).length,
@@ -4861,7 +4807,7 @@ function LeadWorkspace({
     ].includes(i.status),
   );
   const unpublishedVideos = items.filter((i) =>
-    ["shooting_pending", "shooting_done", "editing_done"].includes(i.status),
+    ["ready_to_publish"].includes(i.status),
   );
   const archived = items.filter((i) => ["archived", "needs_revision"].includes(i.status));
   const trashItems = items.filter((i) => i.status === "archived");
@@ -4872,9 +4818,9 @@ function LeadWorkspace({
   });
   const leadWorkflow = {
     "Ý tưởng chờ duyệt": pendingIdeas,
-    "Chờ quay/dựng": items.filter((i) => i.status === "script_approved"),
+    "Chờ quay/dựng": items.filter((i) => i.status === "waiting_production"),
     "Bài đã duyệt": items.filter((i) => ["video_approved", "editing_done"].includes(i.status)),
-    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_post"),
+    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_publish"),
     "Bài đã đăng": published,
     "Trễ deadline": overdue,
   };
@@ -5003,7 +4949,7 @@ function LeadWorkspace({
           {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
         </button>
         <section
-          aria-label="Dọn dẹp dữ liệu test"
+          aria-label="D���n dẹp dữ liệu test"
           className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
         >
           <h2 className="font-semibold text-red-900">
