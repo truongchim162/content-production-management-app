@@ -397,17 +397,12 @@ function Login({
     <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#e7e7e5] p-5 text-zinc-900">
       <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,#00000008_1px,transparent_1px),linear-gradient(to_bottom,#00000008_1px,transparent_1px)] [background-size:52px_52px]" aria-hidden="true" />
       <section className="relative w-full max-w-md border border-zinc-300 bg-[#f7f7f5] p-6 shadow-xl shadow-zinc-500/15 sm:p-9">
-        <div className="mb-10 flex items-center justify-between border-b border-zinc-300 pb-5">
-          <div className="flex items-center gap-3">
-            <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg" alt="HAPPYORSAD logo" className="size-12 rounded-full object-cover" />
-            <div>
-              <p className="font-serif text-2xl tracking-[0.28em] text-zinc-950">HAPPYORSAD</p>
-              <p className="mt-1 text-[9px] uppercase tracking-[0.35em] text-zinc-500">Media workspace</p>
-            </div>
-          </div>
-          <div className="grid size-11 place-items-center rounded-full border border-zinc-300 text-zinc-700">
-            <Clapperboard className="size-5" />
-          </div>
+        <div className="mb-8 flex justify-center border-b border-zinc-300 pb-7">
+          <img
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/1790544556039_1996078562543380284_8485367461786466381_9e1b587329c9818fde59bbc044ace761-0fXMWuBXY7YyhApS7MViR0JqyqOYLK.jpg"
+            alt="HAPPYORSAD logo"
+            className="size-24 rounded-full object-cover shadow-md sm:size-28"
+          />
         </div>
         <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-zinc-500">
           Welcome back
