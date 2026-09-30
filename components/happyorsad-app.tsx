@@ -234,6 +234,17 @@ const platformOptions = [
   "Instagram Reels",
   "Facebook Reels",
 ];
+const formatCardDate = (value: unknown) => {
+  const timestamp = publishedTime(value);
+  return timestamp
+    ? new Intl.DateTimeFormat("vi-VN", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date(timestamp))
+    : "Chưa cập nhật";
+};
+
 const publishedTime = (value: unknown) => {
   if (
     value &&
@@ -459,9 +470,11 @@ function Login({
 
 function NotificationCenter({
   user,
+  role,
   onNavigate,
 }: {
   user: User;
+  role: UserRole;
   onNavigate: (linkId?: string, targetView?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -507,7 +520,7 @@ function NotificationCenter({
   }, [user.uid]);
   const visibleItems = items.filter((item) => {
     const text = `${item.title} ${item.message} ${item.targetView || ""}`.toLowerCase();
-    if (user.role === "lead") {
+    if (role === "lead") {
       return (
         text.includes("content") ||
         text.includes("ý tưởng") ||
@@ -521,7 +534,7 @@ function NotificationCenter({
         item.targetView === "Duyệt video"
       );
     }
-    if (user.role === "creator") {
+    if (role === "creator") {
       return (
         text.includes("kịch bản") ||
         text.includes("video") ||
@@ -845,8 +858,9 @@ function Workspace({
         </div>
         <div className="relative flex items-center gap-3">
           <NotificationCenter
-            user={user}
-            onNavigate={(linkId, targetView) => {
+  user={user}
+  role={role}
+  onNavigate={(linkId, targetView) => {
               if (linkId) setOpenItemId(linkId);
               setView(
                 targetView ||
@@ -1659,7 +1673,7 @@ function ContentWorkspace({
           {
             action: "đã tạo ý tưởng",
             actorName: user.displayName || user.email || "Thành viên",
-            actorRole: user.role,
+            actorRole: "content",
             createdAt: new Date().toISOString(),
           },
         ],
@@ -1707,7 +1721,7 @@ function ContentWorkspace({
     const historyEntry: HistoryEntry = {
       action: activityAction(item.status, nextPatch.status),
       actorName: user.displayName || user.email || "Thành viên",
-      actorRole: user.role,
+      actorRole: "content",
       createdAt: new Date().toISOString(),
     };
     const patchWithHistory = {
@@ -3308,8 +3322,8 @@ function ItemMetadata({ item }: { item: Item }) {
   return (
     <div className="my-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-stone-500">
       <span>Sản phẩm: {item.productName || item.contentType || "Khác"}</span>
-      <span>Tạo: {formatDate(item.createdAt)}</span>
-      <span>Duyệt: {formatDate(item.scriptApprovedAt || item.approvedAt)}</span>
+      <span>Tạo: {formatCardDate(item.createdAt)}</span>
+      <span>Duyệt: {formatCardDate(item.scriptApprovedAt || item.approvedAt)}</span>
     </div>
   );
 }
