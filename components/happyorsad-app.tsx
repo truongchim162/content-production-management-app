@@ -850,13 +850,14 @@ function Workspace({
           "Duyệt video",
           "Kho lưu trữ",
           "Viết kịch bản chi tiết",
+          "Lịch làm việc",
           "Lịch quay & dựng",
           "Sân dựng video",
           "Cấu hình hệ thống",
           "Quản lý nhân sự",
         ]
-      : role === "content"
-        ? ["Tất cả Content / Viết Kịch Bản", "Kho Lưu Trữ"]
+  : role === "content"
+  ? ["Tất cả Content / Viết Kịch Bản", "Kho Lưu Trữ", "Lịch làm việc"]
         : [
             "Lịch Quay & Dựng Video",
             "Cần Feedback / Sửa Video",
@@ -985,7 +986,9 @@ function Workspace({
               </button>
             ))}
           </div>
-          {role === "content" ||
+          {view === "Lịch làm việc" ? (
+            <WorkSchedule user={user} isLead={role === "lead"} />
+          ) : role === "content" ||
           (role === "lead" &&
             ["Tạo ý tưởng", "Viết kịch bản chi tiết"].includes(view)) ? (
             <ContentWorkspace
@@ -1166,7 +1169,7 @@ function ProfileModal({
             onClick={() => setTab("password")}
             className={`flex-1 rounded-md py-2 text-xs ${tab === "password" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
           >
-            Đổi mật kh��u
+            Đổi m��t kh��u
           </button>
         </div>
         {message && (
@@ -2772,7 +2775,7 @@ function ScriptEditor({
         no: 2,
         shot: "Cận chất liệu và chi tiết phụ kiện",
         angle: "Close-up chuyển động",
-        voice: "Điểm nhấn nằm ở chất liệu và phom dáng.",
+        voice: "Điểm nhấn n���m ở chất liệu và phom dáng.",
         text: "DETAILS MATTER",
       },
       {
@@ -2943,6 +2946,57 @@ function Field({
     </label>
   );
 }
+type ScheduleType = "studio" | "onsite" | "wfh" | "off";
+type ScheduleEntry = { type: ScheduleType; shift: "morning" | "afternoon" | "full"; location?: string; outfit?: string; checkedIn?: boolean };
+
+const scheduleTypes: Record<ScheduleType, { label: string; icon: string; color: string }> = {
+  studio: { label: "Studio / Văn phòng", icon: "●", color: "bg-emerald-500" },
+  onsite: { label: "Đi quay ngoại cảnh", icon: "🎬", color: "bg-zinc-900" },
+  wfh: { label: "Làm online / WFH", icon: "●", color: "bg-sky-500" },
+  off: { label: "Nghỉ phép", icon: "●", color: "bg-rose-500" },
+};
+
+function WorkSchedule({ user, isLead = false }: { user: User; isLead?: boolean }) {
+  const [month, setMonth] = useState(() => new Date());
+  const [entries, setEntries] = useState<Record<string, ScheduleEntry>>({});
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [type, setType] = useState<ScheduleType>("studio");
+  const [shift, setShift] = useState<ScheduleEntry["shift"]>("full");
+  const [location, setLocation] = useState("");
+  const [outfit, setOutfit] = useState("");
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1).getDay();
+  const days = new Date(year, monthIndex + 1, 0).getDate();
+  const keyFor = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const saveEntry = () => {
+    if (!selectedDate) return;
+    setEntries((current) => ({ ...current, [selectedDate]: { type, shift, location: type === "onsite" ? location : undefined, outfit: type === "onsite" ? outfit : undefined, checkedIn: current[selectedDate]?.checkedIn } }));
+    setSelectedDate(null);
+  };
+  const checkIn = () => {
+    if (!selectedDate || selectedDate !== todayKey) return;
+    setEntries((current) => ({ ...current, [selectedDate]: { ...(current[selectedDate] || { type: "studio", shift: "full" }), checkedIn: true } }));
+    setSelectedDate(null);
+  };
+  const stats = Object.values(entries).reduce((result, entry) => ({ ...result, [entry.type]: result[entry.type] + 1, checked: result.checked + (entry.checkedIn ? 1 : 0) }), { studio: 0, onsite: 0, wfh: 0, off: 0, checked: 0 });
+  return (
+    <section className="mx-auto max-w-6xl space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div><p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Lịch làm việc</p><h1 className="mt-1 text-2xl font-semibold">Đăng ký lịch & chấm công</h1><p className="mt-1 text-sm text-muted-foreground">Chọn một ngày để đăng ký Studio, đi quay, WFH hoặc nghỉ phép.</p></div>
+        <div className="flex items-center gap-2"><button type="button" onClick={() => setMonth(new Date(year, monthIndex - 1, 1))} className="rounded-lg border px-3 py-2">‹</button><strong className="min-w-36 text-center">Tháng {monthIndex + 1}/{year}</strong><button type="button" onClick={() => setMonth(new Date(year, monthIndex + 1, 1))} className="rounded-lg border px-3 py-2">›</button></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{[["onsite", "Đi quay"], ["studio", "Studio"], ["wfh", "WFH"], ["off", "Nghỉ"], ["checked", "Đã chấm công"]].map(([key, label]) => <div key={key} className="rounded-xl border bg-card p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-semibold">{stats[key as keyof typeof stats]}</p></div>)}</div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+        <div className="rounded-2xl border bg-card p-3 sm:p-5"><div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground">{["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => <span key={day} className="p-2">{day}</span>)}</div><div className="grid grid-cols-7 gap-1">{Array.from({ length: firstDay }).map((_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: days }, (_, index) => { const day = index + 1; const dateKey = keyFor(day); const entry = entries[dateKey]; const config = entry && scheduleTypes[entry.type]; return <button type="button" key={dateKey} onClick={() => { setSelectedDate(dateKey); if (entry) { setType(entry.type); setShift(entry.shift); setLocation(entry.location || ""); setOutfit(entry.outfit || ""); } }} className={`relative min-h-20 rounded-xl border p-2 text-left transition hover:border-zinc-900 ${dateKey === todayKey ? "ring-2 ring-zinc-900" : ""} ${entry?.checkedIn ? "border-emerald-700 ring-2 ring-emerald-300" : "border-border"}`}><span className="text-sm font-semibold">{day}</span>{entry && <span className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${entry.type === "onsite" ? "text-zinc-900" : "text-muted-foreground"}`}><i className={`size-2 rounded-full ${config?.color}`} />{config?.icon} <span className="hidden sm:inline">{config?.label}</span></span>}{entry?.checkedIn && <CheckCircle2 className="absolute right-1 top-1 size-4 text-emerald-600" aria-label="Đã chấm công" />}</button>})}</div></div>
+        <aside className="rounded-2xl border bg-card p-4"><h2 className="font-semibold">Trạng thái</h2><div className="mt-4 space-y-3">{Object.entries(scheduleTypes).map(([key, config]) => <div key={key} className="flex items-center gap-2 text-sm"><i className={`size-3 rounded-full ${config.color}`} />{config.icon} {config.label}</div>)}<p className="pt-2 text-xs text-muted-foreground">Viền xanh và dấu tick là ngày đã chấm công thực tế.</p></div></aside>
+      </div>
+      {selectedDate && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Ngày đăng ký</p><h2 className="text-xl font-semibold">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString("vi-VN")}</h2></div><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-3 py-1">×</button></div><div className="mt-5 grid grid-cols-2 gap-2">{Object.entries(scheduleTypes).map(([key, config]) => <button type="button" key={key} onClick={() => setType(key as ScheduleType)} className={`rounded-xl border p-3 text-left text-sm ${type === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}><span className="mr-2">{config.icon}</span>{config.label}</button>)}</div><div className="mt-4"><label className="text-sm font-medium">Ca làm</label><div className="mt-2 grid grid-cols-3 gap-2">{[["morning", "Ca sáng"], ["afternoon", "Ca chiều"], ["full", "Cả ngày"]].map(([key, label]) => <button type="button" key={key} onClick={() => setShift(key as ScheduleEntry["shift"])} className={`rounded-lg border px-2 py-2 text-xs ${shift === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}>{label}</button>)}</div></div>{type === "onsite" && <div className="mt-4 grid gap-3"><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Địa điểm quay" className="rounded-lg border bg-background px-3 py-2 text-sm" /><input value={outfit} onChange={(event) => setOutfit(event.target.value)} placeholder="Bộ sưu tập / Outfit" className="rounded-lg border bg-background px-3 py-2 text-sm" /></div>}<div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button>{selectedDate === todayKey && <button type="button" onClick={checkIn} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm text-emerald-700">Chấm công hôm nay</button>}<button type="button" onClick={saveEntry} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu đăng ký</button></div></div></div>}
+    </section>
+  );
+}
+
 function CreatorWorkspace({
   user,
   view,
