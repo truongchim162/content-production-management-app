@@ -1035,9 +1035,10 @@ function Workspace({
           ) : role === "content" ||
           (role === "lead" &&
             ["Tạo ý tưởng", "Viết kịch bản chi tiết"].includes(view)) ? (
-            <ContentWorkspace
-              user={user}
-              view={view}
+<ContentWorkspace
+  user={user}
+  role={role}
+  view={view}
               canManageAll={role === "lead"}
               openItemId={openItemId}
             />
@@ -1147,7 +1148,7 @@ function ProfileModal({
       );
       setMessage("Đã lưu thông tin cá nhân.");
     } catch {
-      setError("Không thể cập nhật hồ sơ. Vui lòng thử lại.");
+      setError("Không thể c��p nhật hồ sơ. Vui lòng thử lại.");
     } finally {
       setBusy(false);
     }
@@ -1584,11 +1585,13 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
 
 function ContentWorkspace({
   user,
+  role,
   view,
   canManageAll = false,
   openItemId,
 }: {
   user: User;
+  role: Role;
   view: string;
   canManageAll?: boolean;
   openItemId?: string;
