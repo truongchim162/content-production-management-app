@@ -1672,7 +1672,6 @@ function ContentWorkspace({
       await deleteDoc(doc(db, "contentItems", item.id));
   };
   const statCards = [
-    { key: "all" as const, label: "Tổng ý tưởng", value: contentStats.all },
     {
       key: "pending" as const,
       label: "Chờ duyệt",
@@ -4033,7 +4032,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           ],
           ["Đã đăng tháng này", published.length, Check],
           [
-            "Trễ deadline",
+            "Tr�� deadline",
             items.filter(
               (i) =>
                 i.scheduledAt &&
