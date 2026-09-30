@@ -223,6 +223,30 @@ const notifyUser = async (
     isRead: false,
     createdAt: serverTimestamp(),
   });
+const stageBadgeMeta: Record<string, { label: string; icon: string; tone: string; step: number }> = {
+  idea_pending: { label: "1. Ý tưởng chờ duyệt", icon: "●", tone: "bg-amber-100 text-amber-800", step: 1 },
+  approved_idea: { label: "2. Đã duyệt YT / Đang viết KB", icon: "✎", tone: "bg-sky-100 text-sky-800", step: 2 },
+  scripting: { label: "2. Đã duyệt YT / Đang viết KB", icon: "✎", tone: "bg-sky-100 text-sky-800", step: 2 },
+  script_review_creator: { label: "3. KB chờ Creator duyệt", icon: "▤", tone: "bg-violet-100 text-violet-800", step: 3 },
+  waiting_production: { label: "4. Chờ quay & dựng", icon: "●", tone: "bg-indigo-100 text-indigo-800", step: 4 },
+  shooting_pending: { label: "4. Chờ quay & dựng", icon: "●", tone: "bg-indigo-100 text-indigo-800", step: 4 },
+  video_pending_lead: { label: "5. Video chờ Lead duyệt", icon: "▣", tone: "bg-blue-100 text-blue-800", step: 5 },
+  ready_to_publish: { label: "6. Bài sẵn sàng đăng", icon: "↗", tone: "bg-emerald-100 text-emerald-800", step: 6 },
+  ready_to_post: { label: "6. Bài sẵn sàng đăng", icon: "↗", tone: "bg-emerald-100 text-emerald-800", step: 6 },
+  published: { label: "7. Bài đã đăng", icon: "●", tone: "bg-purple-100 text-purple-800", step: 7 },
+  idea_rejected: { label: "Cần sửa Ý tưởng", icon: "●", tone: "bg-orange-100 text-orange-800", step: 1 },
+  idea_needs_revision: { label: "Cần sửa Ý tưởng", icon: "●", tone: "bg-orange-100 text-orange-800", step: 1 },
+  script_rejected: { label: "Cần sửa Kịch bản", icon: "●", tone: "bg-orange-100 text-orange-800", step: 3 },
+  needs_revision: { label: "Cần sửa Kịch bản", icon: "●", tone: "bg-orange-100 text-orange-800", step: 3 },
+  video_rejected: { label: "Cần sửa Video", icon: "●", tone: "bg-red-100 text-red-800", step: 5 },
+  video_needs_revision: { label: "Cần sửa Video", icon: "●", tone: "bg-red-100 text-red-800", step: 5 },
+};
+
+function StageProgress({ status }: { status: string }) {
+  const meta = stageBadgeMeta[status] || { label: statusLabels[status as Status] || status, icon: "●", tone: "bg-muted text-muted-foreground", step: 1 };
+  return <div className="mt-2 grid gap-2"><span className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${meta.tone}`}><span aria-hidden="true">{meta.icon}</span>{meta.label}</span><div className="flex items-center gap-1" aria-label={`Tiến độ ${meta.step} trên 8`} role="progressbar" aria-valuemin={1} aria-valuemax={8} aria-valuenow={meta.step}>{Array.from({ length: 8 }, (_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full transition-colors ${index + 1 < meta.step ? "bg-zinc-900 dark:bg-zinc-100" : index + 1 === meta.step ? "animate-pulse bg-orange-500" : "bg-zinc-200 dark:bg-zinc-700"}`} />)}</div></div>;
+}
+
 const statusLabels: Record<Status, string> = {
   idea_pending: "Ý tưởng chờ duyệt",
   script_review_creator: "Kịch bản chờ Creator duyệt",
@@ -1992,8 +2016,9 @@ function ContentWorkspace({
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${item.status === "idea_rejected" || item.status === "idea_needs_revision" ? "bg-amber-100 text-amber-800" : item.status === "script_rejected" || item.status === "needs_revision" ? "bg-orange-100 text-orange-800" : item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-50 text-orange-600"}`}>
                       {statusLabels[item.status]}
                     </span>
-                    <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-                    <p className="mt-1 text-xs text-muted-foreground">
+<h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+  <StageProgress status={item.status} />
+  <p className="mt-1 text-xs text-muted-foreground">
                       {item.description || "Chưa có mô tả."}
                     </p>
                     {["idea_rejected", "idea_needs_revision", "script_rejected", "needs_revision", "video_rejected", "video_needs_revision"].includes(item.status) && (item.ideaFeedback || item.scriptFeedback || item.videoFeedback || item.feedback) && (
@@ -2808,6 +2833,7 @@ function IdeaRevisionEditor({
           <div>
             <p className="text-xs text-orange-600">Ý tưởng cần chỉnh sửa</p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+  <StageProgress status={item.status} />
           </div>
           <button type="button" onClick={onClose} aria-label="Đóng">
             <X className="size-4" />
@@ -2942,6 +2968,7 @@ function ScriptEditor({
               {statusLabels[item.status]}
             </p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+  <StageProgress status={item.status} />
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
                 <strong>Feedback t��� Lead:</strong>
@@ -3754,6 +3781,7 @@ function CreatorEditor({
               {statusLabels[item.status]}
             </p>
             <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+  <StageProgress status={item.status} />
             {item.status === "video_needs_revision" && item.feedback && (
               <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
                 <strong>Feedback từ Lead:</strong>
@@ -4496,8 +4524,9 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                     <span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span>
                     {isPastPublishDeadline(item) && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Trễ deadline</span>}
                   </div>
-                  <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-                  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
+<h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+  <StageProgress status={item.status} />
+  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
                     <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
                     <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
                     <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
@@ -5131,9 +5160,10 @@ function LeadWorkspace({
                       <span className="text-[10px] uppercase tracking-wider text-orange-500">
                         {statusLabels[item.status]}
                       </span>
-                      <h2 className="mt-1 w-full break-words line-clamp-2 font-medium">
-                        {item.title}
-                      </h2>
+<h2 className="mt-1 w-full break-words line-clamp-2 font-medium">
+  {item.title}
+  </h2>
+  <StageProgress status={item.status} />
                       <p className="mt-1 w-full break-words overflow-hidden text-xs text-muted-foreground">
                         {item.description || item.caption || "Chưa có mô tả."}
                       </p>
@@ -5274,8 +5304,9 @@ function LeadWorkspace({
                           <span className="text-[10px] uppercase tracking-wider text-orange-500">
                             {statusLabels[item.status]}
                           </span>
-                          <h3 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h3>
-                          <ItemMetadata item={item} />
+<h3 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h3>
+  <StageProgress status={item.status} />
+  <ItemMetadata item={item} />
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
                             <span className="rounded-full bg-accent px-2 py-1">
                               {item.contentType || "Chưa phân loại"}
