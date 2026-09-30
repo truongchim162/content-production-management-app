@@ -1875,6 +1875,7 @@ function ContentWorkspace({
         onCreate={() => setShowForm(true)}
         onEdit={setSelected}
         onDelete={removeItem}
+        canDelete={(item) => canManageAll || item.status === "idea_pending"}
         onPromote={(item) => updateItem(item, { status: "idea_pending" })}
       >
         {showForm && (
@@ -2043,8 +2044,10 @@ function ContentWorkspace({
 {selected && (
           <StageDetailEditor
             item={selected}
+            role={role}
             onClose={() => setSelected(null)}
             onSave={(patch) => updateItem(selected, patch)}
+            onDelete={() => { setSelected(null); removeItem(selected); }}
           />
         )}
     </>
@@ -2053,14 +2056,20 @@ function ContentWorkspace({
 
 function StageDetailEditor({
   item,
+  role,
   onClose,
   onSave,
+  onDelete,
 }: {
   item: Item;
+  role: Role;
   onClose: () => void;
   onSave: (patch: Partial<Item>) => void;
+  onDelete: () => void;
 }) {
-  const readOnly = ["script_review_creator", "waiting_production", "video_pending_lead", "ready_to_publish", "published"].includes(item.status);
+  const canDelete = role === "lead" || (role === "content" && item.status === "idea_pending");
+  const canEdit = (role === "content" && ["idea_pending", "scripting"].includes(item.status)) || (role === "creator" && ["script_review_creator", "waiting_production", "ready_to_publish"].includes(item.status)) || (role === "lead" && item.status === "video_pending_lead");
+  const readOnly = !canEdit;
   const [draft, setDraft] = useState({
     title: item.title,
     contentType: item.contentType || "",
@@ -2091,7 +2100,7 @@ function StageDetailEditor({
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">Kiểm tra bắt buộc trước khi đăng</p>{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
       {item.history?.length ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.history.filter((entry) => entry.note).map((entry, index) => <p key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
-    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{isReview && <><button type="button" onClick={() => save({ status: "video_needs_revision", feedback: draft.leadNote })} className="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && <button type="button" disabled={!draft.finalVideoLink || !draft.scheduledAt || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{!readOnly && !isReview && !isPublish && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer></section></div>;
+    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => { if (window.confirm("Bạn có chắc chắn muốn xóa bài viết này?")) onDelete(); }} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{isReview && role === "lead" && <><button type="button" onClick={() => save({ status: "video_needs_revision", feedback: draft.leadNote })} className="rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{!readOnly && !isReview && !isPublish && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer></section></div>;
 }
 
 function IdeaVault({
@@ -2100,6 +2109,7 @@ function IdeaVault({
   onCreate,
   onEdit,
   onDelete,
+  canDelete = () => true,
   onPromote,
   children,
 }: {
@@ -2108,6 +2118,7 @@ function IdeaVault({
   onCreate: () => void;
   onEdit: (item: Item) => void;
   onDelete: (item: Item) => void;
+  canDelete?: (item: Item) => boolean;
   onPromote: (item: Item) => void;
   children?: ReactNode;
 }) {
@@ -2174,14 +2185,14 @@ function IdeaVault({
                   <button type="button" onClick={() => onPromote(item)} className="rounded-md bg-zinc-900 px-2 py-1 text-sm font-medium text-white">Lấy làm idea chính</button>
                   {item.reference && <a href={item.reference} target="_blank" rel="noreferrer" className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Mở link</a>}
                   <button type="button" onClick={() => onEdit(item)} className="rounded-md border border-stone-200 px-2 py-1 text-[10px] text-zinc-700">Sửa</button>
-                  <button type="button" onClick={() => onDelete(item)} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">Xóa</button>
+                  {canDelete(item) && <button type="button" onClick={() => { if (window.confirm("Bạn có chắc chắn muốn xóa bài viết này?")) onDelete(item); }} className="rounded-md border border-red-200 px-2 py-1 text-[10px] text-red-700">Xóa</button>}
                 </div>
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea phù hợp.</div>
+        <div className="rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center text-sm text-zinc-600">Chưa có idea ph�� hợp.</div>
       )}
     </section>
   );
@@ -3420,7 +3431,7 @@ function CreatorWorkspace({
                     Đăng dự kiến:{" "}
                     {item.scheduledAt
                       ? new Date(item.scheduledAt).toLocaleString("vi-VN")
-                      : "—"}
+                      : "���"}
                   </p>
                 </div>
                 <div>
