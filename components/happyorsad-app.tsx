@@ -75,6 +75,11 @@ import {
 type Status =
   | "idea_pending"
   | "idea_needs_revision"
+  | "script_review_creator"
+  | "waiting_production"
+  | "video_pending_lead"
+  | "ready_to_publish"
+  | "overdue"
   | "pending_approval"
   | "approved_idea"
   | "needs_revision"
@@ -201,7 +206,12 @@ const notifyUser = async (
     createdAt: serverTimestamp(),
   });
 const statusLabels: Record<Status, string> = {
-  idea_pending: "Chờ duyệt ý tưởng",
+  idea_pending: "Ý tưởng chờ duyệt",
+  script_review_creator: "Kịch bản chờ Creator duyệt",
+  waiting_production: "Chờ quay & dựng",
+  video_pending_lead: "Video chờ Lead duyệt",
+  ready_to_publish: "Bài sẵn sàng đăng",
+  overdue: "Trễ deadline",
   idea_needs_revision: "Ý tưởng cần sửa",
   pending_approval: "Chờ duyệt",
   approved_idea: "Đã duyệt ý tưởng",
@@ -245,7 +255,7 @@ const platformOptions = [
 ];
 const isPastPublishDeadline = (item: Item) => {
   const value = item.scheduledPublishDate || item.scheduledAt;
-  return item.status !== "published" && !!value && new Date(value).getTime() < Date.now();
+  return !["published", "overdue"].includes(item.status) && !!value && new Date(value).getTime() < Date.now();
 };
 
 const formatCardDate = (value: unknown) => {
@@ -1772,7 +1782,7 @@ function ContentWorkspace({
     const nextPatch = revisingIdea
       ? { ...patch, status: "idea_pending" as Status }
       : item.status === "approved_idea" && editingScript
-        ? { ...patch, status: "script_pending_creator" as Status }
+        ? { ...patch, status: "script_review_creator" as Status }
         : patch;
     const historyEntry: HistoryEntry = {
       action: activityAction(item.status, nextPatch.status),
@@ -3576,7 +3586,7 @@ function CreatorEditor({
       );
       return;
     }
-    onSave({ ...draft, status: "video_pending" });
+    onSave({ ...draft, status: "video_pending_lead" });
     showToast("Đã gửi video cho Lead duyệt!");
     onClose();
   };
@@ -3801,7 +3811,7 @@ function CreatorEditor({
           )}
           {item.status === "script_pending_creator" && (
             <button
-              onClick={() => save({ status: "script_approved" })}
+              onClick={() => save({ status: "waiting_production" })}
               className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"
             >
               <Check className="size-4" />
@@ -4586,11 +4596,13 @@ function LeadWorkspace({
   }, [openItemId, items]);
   const persist = async (item: Item, patch: Partial<Item>) => {
     const publishDate = item.scheduledPublishDate || item.scheduledAt;
-    const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
-    const nextPatch =
-      patch.status === "published" && wasOverdue
-        ? { ...patch, status: "published" as Status, wasOverdue: true }
-        :
+  const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
+  const nextPatch =
+    patch.status === "published" && wasOverdue
+      ? { ...patch, status: "published" as Status, wasOverdue: true }
+      : wasOverdue && patch.status !== "published"
+      ? { ...patch, status: "overdue" as Status }
+      :
       patch.status === "approved_idea" && item.status === "script_pending"
         ? { ...patch, status: "script_approved" as Status }
         : patch;
@@ -5047,7 +5059,7 @@ function LeadWorkspace({
                   <button
                     onClick={() =>
                       persist(selected, {
-                        status: "approved_idea",
+                        status: "scripting",
                         approvedAt: serverTimestamp(),
                       })
                     }
@@ -5056,13 +5068,13 @@ function LeadWorkspace({
                     Duyệt ý tưởng
                   </button>
                 )}
-                {["editing_done", "video_pending"].includes(
+                {["editing_done", "video_pending", "video_pending_lead"].includes(
                   selected.status,
                 ) && (
                   <button
                     onClick={() =>
                       persist(selected, {
-                        status: "ready_to_post",
+                        status: "ready_to_publish",
                         approvedAt: serverTimestamp(),
                       })
                     }
