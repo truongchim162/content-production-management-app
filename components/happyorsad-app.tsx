@@ -1,216 +1,4936 @@
-'use client'
+"use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { EmailAuthProvider, onAuthStateChanged, reauthenticateWithCredential, signInWithEmailAndPassword, signOut, updatePassword, updateProfile, type User } from 'firebase/auth'
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
-import { auth, db, demoAccounts, roleLabels, createTeamMemberAccount, type UserRole } from '@/lib/firebase'
-import { AlertCircle, AlertTriangle, Archive, BarChart3, Bell, CalendarDays, Check, CheckCircle2, CheckSquare, Clapperboard, CloudSun, Clock, FileCheck2, Film, FileText, GripVertical, LayoutDashboard, Lightbulb, Link2, LogOut, MapPin, Menu, MessageCircle, Pencil, Plus, Save, Send, Settings, Sparkles, Trash2, UserRound, Video, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  EmailAuthProvider,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  signInWithEmailAndPassword,
+  signOut,
+  updatePassword,
+  updateProfile,
+  type User,
+} from "firebase/auth";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import {
+  auth,
+  db,
+  demoAccounts,
+  roleLabels,
+  createTeamMemberAccount,
+  type UserRole,
+} from "@/lib/firebase";
+import {
+  AlertCircle,
+  AlertTriangle,
+  Archive,
+  BarChart3,
+  Bell,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  CheckSquare,
+  Clapperboard,
+  CloudSun,
+  Clock,
+  FileCheck2,
+  Film,
+  FileText,
+  GripVertical,
+  LayoutDashboard,
+  Lightbulb,
+  Link2,
+  LogOut,
+  MapPin,
+  Menu,
+  MessageCircle,
+  Pencil,
+  Plus,
+  Save,
+  Send,
+  Settings,
+  Sparkles,
+  Trash2,
+  UserRound,
+  Video,
+  X,
+} from "lucide-react";
 
-type Status = 'idea_pending' | 'idea_needs_revision' | 'pending_approval' | 'approved_idea' | 'needs_revision' | 'video_needs_revision' | 'script_pending' | 'script_pending_creator' | 'script_approved' | 'scripting' | 'shooting_pending' | 'shooting_done' | 'video_pending' | 'editing_done' | 'ready_to_post' | 'published' | 'archived' | 'rejected'
-type Shot = { no: number; shot: string; angle: string; voice: string; text: string }
-type Item = { id: string; title: string; description?: string; reference?: string; contentType?: string; platforms?: string[]; goal?: string; status: Status; location?: string; outfit?: string; props?: string; shots?: Shot[]; shotlistLink?: string; ownerId?: string; createdAt?: unknown; approvedAt?: unknown; source?: string; editNote?: string; sourceLink?: string; shootNote?: string; scheduledAt?: string; overdueNotifiedAt?: unknown; finalVideoLink?: string; caption?: string; leadNote?: string; publishedLink?: string; publishedAt?: unknown; feedback?: string; feedbackUnread?: number }
-type TaskMessage = { id: string; text: string; senderName: string; senderRole: UserRole; senderId?: string; createdAt?: { toDate?: () => Date } | null }
-type NotificationItem = { id: string; userId: string; title: string; message: string; type: 'status_change' | 'feedback' | 'chat'; linkId?: string; targetView?: string; videoLink?: string; isRead: boolean; createdAt?: { toDate?: () => Date } | null }
-const notifyRole = async (role: UserRole, notification: Omit<NotificationItem, 'id' | 'userId' | 'isRead'>, exceptUserId?: string) => { const snap = await getDocs(query(collection(db, 'users'), where('role', '==', role))); await Promise.all(snap.docs.map((entry) => entry.id).filter((id) => id !== exceptUserId).map((userId) => addDoc(collection(db, 'notifications'), { ...notification, userId, isRead: false, createdAt: serverTimestamp() }))) }
-const notifyUser = async (userId: string, notification: Omit<NotificationItem, 'id' | 'userId' | 'isRead'>) => addDoc(collection(db, 'notifications'), { ...notification, userId, isRead: false, createdAt: serverTimestamp() })
-const statusLabels: Record<Status, string> = { idea_pending: 'Chờ duyệt ý tưởng', idea_needs_revision: 'Ý tưởng cần sửa', pending_approval: 'Chờ duyệt', approved_idea: 'Đã duyệt ý tưởng', needs_revision: 'Cần chỉnh sửa', video_needs_revision: 'Video cần sửa', script_pending: 'Chờ duyệt kịch bản', script_pending_creator: 'Creator chờ duyệt kịch bản', script_approved: 'Kịch bản đã duyệt', scripting: 'Đang viết kịch bản', shooting_pending: 'Chờ quay', shooting_done: 'Đã quay', video_pending: 'Video chờ duyệt', editing_done: 'Chờ duyệt video', ready_to_post: 'Sẵn sàng đăng', published: 'Đã đăng', archived: 'Kho lưu trữ', rejected: 'Đã từ chối' }
-const roleNames: Record<UserRole, string> = { lead: 'Lan Anh', content: 'Minh Anh', creator: 'Quốc Bảo' }
-const demoItems: Item[] = []
-const contentTypes = ['Biến hình', 'Fitcheck', 'Tổng hợp Outfit', 'Review sản phẩm', 'Storytelling', 'Khác']
-const platformOptions = ['TikTok', 'Shopee Video', 'Instagram Reels', 'Facebook Reels']
-const publishedTime = (value: unknown) => { if (value && typeof value === 'object' && 'toMillis' in value && typeof (value as { toMillis?: unknown }).toMillis === 'function') return (value as { toMillis: () => number }).toMillis(); if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') return (value as { toDate: () => Date }).toDate().getTime(); if (typeof value === 'string' || typeof value === 'number') return new Date(value).getTime() || 0; return 0 }
-const publishedLabel = (value: unknown) => { const timestamp = publishedTime(value); return timestamp ? new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }).format(timestamp) : 'Chưa cập nhật' }
+type Status =
+  | "idea_pending"
+  | "idea_needs_revision"
+  | "pending_approval"
+  | "approved_idea"
+  | "needs_revision"
+  | "video_needs_revision"
+  | "script_pending"
+  | "script_pending_creator"
+  | "script_approved"
+  | "scripting"
+  | "shooting_pending"
+  | "shooting_done"
+  | "video_pending"
+  | "editing_done"
+  | "ready_to_post"
+  | "published"
+  | "archived"
+  | "rejected";
+type Shot = {
+  no: number;
+  shot: string;
+  angle: string;
+  voice: string;
+  text: string;
+};
+type Item = {
+  id: string;
+  title: string;
+  description?: string;
+  reference?: string;
+  contentType?: string;
+  platforms?: string[];
+  goal?: string;
+  status: Status;
+  location?: string;
+  outfit?: string;
+  props?: string;
+  shots?: Shot[];
+  shotlistLink?: string;
+  ownerId?: string;
+  createdAt?: unknown;
+  approvedAt?: unknown;
+  source?: string;
+  editNote?: string;
+  sourceLink?: string;
+  shootNote?: string;
+  scheduledAt?: string;
+  overdueNotifiedAt?: unknown;
+  finalVideoLink?: string;
+  caption?: string;
+  leadNote?: string;
+  publishedLink?: string;
+  publishedAt?: unknown;
+  feedback?: string;
+  feedbackUnread?: number;
+};
+type TaskMessage = {
+  id: string;
+  text: string;
+  senderName: string;
+  senderRole: UserRole;
+  senderId?: string;
+  createdAt?: { toDate?: () => Date } | null;
+};
+type NotificationItem = {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: "status_change" | "feedback" | "chat";
+  linkId?: string;
+  targetView?: string;
+  videoLink?: string;
+  isRead: boolean;
+  createdAt?: { toDate?: () => Date } | null;
+};
+const notifyRole = async (
+  role: UserRole,
+  notification: Omit<NotificationItem, "id" | "userId" | "isRead">,
+  exceptUserId?: string,
+) => {
+  const snap = await getDocs(
+    query(collection(db, "users"), where("role", "==", role)),
+  );
+  await Promise.all(
+    snap.docs
+      .map((entry) => entry.id)
+      .filter((id) => id !== exceptUserId)
+      .map((userId) =>
+        addDoc(collection(db, "notifications"), {
+          ...notification,
+          userId,
+          isRead: false,
+          createdAt: serverTimestamp(),
+        }),
+      ),
+  );
+};
+const notifyUser = async (
+  userId: string,
+  notification: Omit<NotificationItem, "id" | "userId" | "isRead">,
+) =>
+  addDoc(collection(db, "notifications"), {
+    ...notification,
+    userId,
+    isRead: false,
+    createdAt: serverTimestamp(),
+  });
+const statusLabels: Record<Status, string> = {
+  idea_pending: "Chờ duyệt ý tưởng",
+  idea_needs_revision: "Ý tưởng cần sửa",
+  pending_approval: "Chờ duyệt",
+  approved_idea: "Đã duyệt ý tưởng",
+  needs_revision: "Cần chỉnh sửa",
+  video_needs_revision: "Video cần sửa",
+  script_pending: "Chờ duyệt kịch bản",
+  script_pending_creator: "Creator chờ duyệt kịch bản",
+  script_approved: "Kịch bản đã duyệt",
+  scripting: "Đang viết kịch bản",
+  shooting_pending: "Chờ quay",
+  shooting_done: "Đã quay",
+  video_pending: "Video chờ duyệt",
+  editing_done: "Chờ duyệt video",
+  ready_to_post: "Sẵn sàng đăng",
+  published: "Đã đăng",
+  archived: "Kho lưu trữ",
+  rejected: "Đã từ chối",
+};
+const roleNames: Record<UserRole, string> = {
+  lead: "Lan Anh",
+  content: "Minh Anh",
+  creator: "Quốc Bảo",
+};
+const demoItems: Item[] = [];
+const contentTypes = [
+  "Biến hình",
+  "Fitcheck",
+  "Tổng hợp Outfit",
+  "Review sản phẩm",
+  "Storytelling",
+  "Khác",
+];
+const platformOptions = [
+  "TikTok",
+  "Shopee Video",
+  "Instagram Reels",
+  "Facebook Reels",
+];
+const publishedTime = (value: unknown) => {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toMillis" in value &&
+    typeof (value as { toMillis?: unknown }).toMillis === "function"
+  )
+    return (value as { toMillis: () => number }).toMillis();
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  )
+    return (value as { toDate: () => Date }).toDate().getTime();
+  if (typeof value === "string" || typeof value === "number")
+    return new Date(value).getTime() || 0;
+  return 0;
+};
+const publishedLabel = (value: unknown) => {
+  const timestamp = publishedTime(value);
+  return timestamp
+    ? new Intl.DateTimeFormat("vi-VN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(timestamp)
+    : "Chưa cập nhật";
+};
 
 export default function Page() {
-  const [user, setUser] = useState<User | null>(null); const [role, setRole] = useState<UserRole | null>(null); const [loading, setLoading] = useState(true); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [theme, setTheme] = useState<'light' | 'dark'>('light')
-  useEffect(() => onAuthStateChanged(auth, async (current) => { setUser(current); if (!current) { setRole(null); setLoading(false); return }; try { const profile = await getDoc(doc(db, 'users', current.uid)); const saved = profile.data()?.role; const fallback = current.email?.split('@')[0]; setRole(saved === 'lead' || saved === 'content' || saved === 'creator' ? saved : fallback === 'content' || fallback === 'creator' ? fallback : 'lead') } catch { setRole('lead') } finally { setLoading(false) } }), [])
-  const login = async (mail = email, pass = password) => { setBusy(true); setError(''); try { await signInWithEmailAndPassword(auth, mail.trim(), pass) } catch (e: any) { setError(e?.code === 'auth/invalid-credential' ? 'Email hoặc mật khẩu không đúng.' : `Đăng nhập thất bại (${e?.code ?? 'unknown'}).`) } finally { setBusy(false) } }
-  if (loading) return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Đang kiểm tra phiên đăng nhập...</div>
-  if (!user || !role) return <Login email={email} password={password} setEmail={setEmail} setPassword={setPassword} error={error} busy={busy} onLogin={() => login()} onDemo={(a: any) => login(a.email, 'HappyOrSad@2025')} />
-  return <Workspace role={role} user={user} onLogout={() => signOut(auth)} />
+  const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  useEffect(
+    () =>
+      onAuthStateChanged(auth, async (current) => {
+        setUser(current);
+        if (!current) {
+          setRole(null);
+          setLoading(false);
+          return;
+        }
+        try {
+          const profile = await getDoc(doc(db, "users", current.uid));
+          const saved = profile.data()?.role;
+          const fallback = current.email?.split("@")[0];
+          setRole(
+            saved === "lead" || saved === "content" || saved === "creator"
+              ? saved
+              : fallback === "content" || fallback === "creator"
+                ? fallback
+                : "lead",
+          );
+        } catch {
+          setRole("lead");
+        } finally {
+          setLoading(false);
+        }
+      }),
+    [],
+  );
+  const login = async (mail = email, pass = password) => {
+    setBusy(true);
+    setError("");
+    try {
+      await signInWithEmailAndPassword(auth, mail.trim(), pass);
+    } catch (e: any) {
+      setError(
+        e?.code === "auth/invalid-credential"
+          ? "Email hoặc mật khẩu không đúng."
+          : `Đăng nhập thất bại (${e?.code ?? "unknown"}).`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (loading)
+    return (
+      <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
+        Đang kiểm tra phiên đăng nhập...
+      </div>
+    );
+  if (!user || !role)
+    return (
+      <Login
+        email={email}
+        password={password}
+        setEmail={setEmail}
+        setPassword={setPassword}
+        error={error}
+        busy={busy}
+        onLogin={() => login()}
+        onDemo={(a: any) => login(a.email, "HappyOrSad@2025")}
+      />
+    );
+  return <Workspace role={role} user={user} onLogout={() => signOut(auth)} />;
 }
 
-function Login({ email, password, setEmail, setPassword, error, busy, onLogin, onDemo }: any) { return <main className="grid min-h-screen place-items-center bg-background p-5 text-foreground"><section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8"><div className="mb-8 flex items-center gap-3"><div className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground"><Clapperboard className="size-5" /></div><b>HAPPYORSAD</b></div><p className="mb-2 text-xs uppercase tracking-widest text-orange-500">Welcome back</p><h1 className="text-2xl font-semibold">Đăng nhập workspace</h1><p className="mt-2 text-sm text-muted-foreground">Đăng nhập để tiếp tục công việc của bạn.</p><form onSubmit={(e) => { e.preventDefault(); onLogin() }} className="mt-7 flex flex-col gap-4"><label className="text-xs font-medium">Email<input className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label><label className="text-xs font-medium">Mật khẩu<input className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>{error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{error}</p>}<button disabled={busy} className="h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground">{busy ? 'Đang đăng nhập...' : 'Đăng nhập'}</button></form><div className="my-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">Tài khoản mẫu</div><div className="flex flex-col gap-2">{demoAccounts.map((a: any) => <button key={a.role} onClick={() => onDemo(a)} className="flex items-center justify-between rounded-lg border border-border p-3 text-left text-xs hover:border-orange-400"><span><b>Đăng nhập Demo: {roleLabels[a.role as UserRole]}</b><br /><span className="text-muted-foreground">{a.email}</span></span><span>→</span></button>)}</div></section></main> }
-
-function NotificationCenter({ user, onNavigate }: { user: User; onNavigate: (linkId?: string, targetView?: string) => void }) {
-  const [open, setOpen] = useState(false); const [items, setItems] = useState<NotificationItem[]>([]); const [toast, setToast] = useState<NotificationItem | null>(null); const knownIds = useRef(new Set<string>()); const initialized = useRef(false)
-  useEffect(() => { knownIds.current = new Set(); initialized.current = false; const unsubscribe = onSnapshot(query(collection(db, 'notifications'), where('userId', '==', user.uid), limit(30)), (snap) => { const next = snap.docs.map((entry) => ({ id: entry.id, ...entry.data() } as NotificationItem)).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))); const fresh = next.find((item) => !knownIds.current.has(item.id)); if (initialized.current && fresh) { setToast(fresh); window.setTimeout(() => setToast((current) => current?.id === fresh.id ? null : current), 5000) } next.forEach((item) => knownIds.current.add(item.id)); setItems(next); initialized.current = true }, () => setItems([])); return unsubscribe }, [user.uid])
-  const unread = items.filter((item) => !item.isRead).length
-  const markRead = async (item: NotificationItem) => { if (!item.isRead) await updateDoc(doc(db, 'notifications', item.id), { isRead: true }); setOpen(false); onNavigate(item.linkId, item.targetView) }
-  const markAll = async () => { await Promise.all(items.filter((item) => !item.isRead).map((item) => updateDoc(doc(db, 'notifications', item.id), { isRead: true }))) }
-  return <><div className="relative"><button aria-label="Thông báo" onClick={() => setOpen((value) => !value)} className="relative rounded-lg border border-border p-2"><Bell className="size-4" aria-hidden="true" />{unread > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-bold text-white">{unread > 9 ? '9+' : unread}</span>}</button>{open && <div className="absolute right-0 top-12 z-40 w-[min(92vw,360px)] rounded-xl border border-border bg-card p-2 shadow-xl"><div className="flex items-center justify-between px-2 py-2"><b className="text-sm">Thông báo</b><button onClick={markAll} className="text-[10px] text-orange-600">Đánh dấu tất cả đã đọc</button></div><div className="max-h-80 overflow-y-auto">{items.length ? items.map((item) => <button key={item.id} onClick={() => markRead(item)} className={`block w-full rounded-lg p-3 text-left ${item.isRead ? 'opacity-60' : 'bg-orange-50'}`}><p className="text-xs font-semibold">{item.title}</p><p className="mt-1 text-xs text-muted-foreground">{item.message}</p></button>) : <p className="p-4 text-center text-xs text-muted-foreground">Chưa có thông báo mới.</p>}</div></div>}</div>{toast && <div role="status" className="fixed bottom-4 right-4 z-50 w-[min(92vw,360px)] rounded-xl border border-orange-200 bg-card p-4 shadow-2xl"><button aria-label="Đóng thông báo" onClick={() => setToast(null)} className="absolute right-2 top-2"><X className="size-3" /></button><p className="pr-4 text-xs font-semibold">{toast.title}</p><p className="mt-1 text-xs text-muted-foreground">{toast.message}</p><button onClick={() => markRead(toast)} className="mt-3 text-xs font-medium text-orange-600">Xem chi tiết</button></div>}</>
+function Login({
+  email,
+  password,
+  setEmail,
+  setPassword,
+  error,
+  busy,
+  onLogin,
+  onDemo,
+}: any) {
+  return (
+    <main className="grid min-h-screen place-items-center bg-background p-5 text-foreground">
+      <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="mb-8 flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+            <Clapperboard className="size-5" />
+          </div>
+          <b>HAPPYORSAD</b>
+        </div>
+        <p className="mb-2 text-xs uppercase tracking-widest text-orange-500">
+          Welcome back
+        </p>
+        <h1 className="text-2xl font-semibold">Đăng nhập workspace</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Đăng nhập để tiếp tục công việc của bạn.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onLogin();
+          }}
+          className="mt-7 flex flex-col gap-4"
+        >
+          <label className="text-xs font-medium">
+            Email
+            <input
+              className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium">
+            Mật khẩu
+            <input
+              className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive"
+            >
+              {error}
+            </p>
+          )}
+          <button
+            disabled={busy}
+            className="h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground"
+          >
+            {busy ? "Đang đăng nhập..." : "Đăng nhập"}
+          </button>
+        </form>
+        <div className="my-6 text-center text-[10px] uppercase tracking-widest text-muted-foreground">
+          Tài khoản mẫu
+        </div>
+        <div className="flex flex-col gap-2">
+          {demoAccounts.map((a: any) => (
+            <button
+              key={a.role}
+              onClick={() => onDemo(a)}
+              className="flex items-center justify-between rounded-lg border border-border p-3 text-left text-xs hover:border-orange-400"
+            >
+              <span>
+                <b>Đăng nhập Demo: {roleLabels[a.role as UserRole]}</b>
+                <br />
+                <span className="text-muted-foreground">{a.email}</span>
+              </span>
+              <span>→</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function RoleDrawer({ role, view, open, onClose, onNavigate }: { role: UserRole; view: string; open: boolean; onClose: () => void; onNavigate: (view: string) => void }) {
-  const items: Array<[string, typeof LayoutDashboard, string]> = role === 'lead' ? [
-    ['Tổng quan', LayoutDashboard, 'Tổng quan Lead Control Center'], ['Dashboard thống kê', BarChart3, 'Dashboard thống kê & KPI'], ['Duyệt content', FileCheck2, 'Duyệt Ý tưởng / Content'], ['Duyệt video', Video, 'Duyệt Video'], ['Kho lưu trữ', Archive, 'Kho lưu trữ'], ['Cấu hình hệ thống', Settings, 'Cấu hình hệ thống & Quản lý nhân sự']
-  ] : role === 'content' ? [
-    ['Tất cả Content / Viết Kịch Bản', LayoutDashboard, 'Tổng quan Content Workspace'], ['Kho Lưu Trữ', Archive, 'Kho Lưu Trữ Ý Tưởng'], ['Feedback & Trao Đổi', MessageCircle, 'Feedback & Yêu cầu sửa']
-  ] : [
-    ['Lịch Quay & Dựng Video', LayoutDashboard, 'Lịch Quay & Dựng Video'], ['Cần Feedback / Sửa Video', AlertCircle, 'Cần Feedback / Sửa Video'], ['Danh sách bài đăng', CheckSquare, 'Danh sách bài đã đăng'], ['Feedback & Trao Đổi', MessageCircle, 'Feedback & Trao Đổi']
-  ] as const
-  return <>{open && <button aria-label="Đóng menu" className="fixed inset-0 z-30 bg-black/20" onClick={onClose} />}{open && <aside aria-label="Menu điều hướng" className="fixed inset-y-0 left-0 z-40 w-80 max-w-[86vw] border-r border-stone-200 bg-white p-5 shadow-xl"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-widest text-amber-600">HAPPYORSAD</p><h2 className="mt-1 text-lg font-bold text-zinc-900">Menu workspace</h2></div><button aria-label="Đóng menu" onClick={onClose} className="rounded-lg p-2 text-zinc-600 hover:bg-stone-100"><X aria-hidden="true" /></button></div><nav className="mt-8 flex flex-col gap-1">{items.map(([id, Icon, label]) => <button key={id} onClick={() => { onNavigate(id); onClose() }} className={`flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors ${view === id ? 'bg-amber-50 font-semibold text-amber-600' : 'text-zinc-700 hover:bg-stone-100'}`}><Icon aria-hidden="true" /><span>{label}</span></button>)}</nav></aside>}</>
+function NotificationCenter({
+  user,
+  onNavigate,
+}: {
+  user: User;
+  onNavigate: (linkId?: string, targetView?: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [toast, setToast] = useState<NotificationItem | null>(null);
+  const knownIds = useRef(new Set<string>());
+  const initialized = useRef(false);
+  useEffect(() => {
+    knownIds.current = new Set();
+    initialized.current = false;
+    const unsubscribe = onSnapshot(
+      query(
+        collection(db, "notifications"),
+        where("userId", "==", user.uid),
+        limit(30),
+      ),
+      (snap) => {
+        const next = snap.docs
+          .map(
+            (entry) => ({ id: entry.id, ...entry.data() }) as NotificationItem,
+          )
+          .sort((a, b) =>
+            String(b.createdAt || "").localeCompare(String(a.createdAt || "")),
+          );
+        const fresh = next.find((item) => !knownIds.current.has(item.id));
+        if (initialized.current && fresh) {
+          setToast(fresh);
+          window.setTimeout(
+            () =>
+              setToast((current) =>
+                current?.id === fresh.id ? null : current,
+              ),
+            5000,
+          );
+        }
+        next.forEach((item) => knownIds.current.add(item.id));
+        setItems(next);
+        initialized.current = true;
+      },
+      () => setItems([]),
+    );
+    return unsubscribe;
+  }, [user.uid]);
+  const unread = items.filter((item) => !item.isRead).length;
+  const markRead = async (item: NotificationItem) => {
+    if (!item.isRead)
+      await updateDoc(doc(db, "notifications", item.id), { isRead: true });
+    setOpen(false);
+    onNavigate(item.linkId, item.targetView);
+  };
+  const markAll = async () => {
+    await Promise.all(
+      items
+        .filter((item) => !item.isRead)
+        .map((item) =>
+          updateDoc(doc(db, "notifications", item.id), { isRead: true }),
+        ),
+    );
+  };
+  return (
+    <>
+      <div className="relative">
+        <button
+          aria-label="Thông báo"
+          onClick={() => setOpen((value) => !value)}
+          className="relative rounded-lg border border-border p-2"
+        >
+          <Bell className="size-4" aria-hidden="true" />
+          {unread > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-red-500 px-1 text-center text-[10px] font-bold text-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+        {open && (
+          <div className="absolute right-0 top-12 z-40 w-[min(92vw,360px)] rounded-xl border border-border bg-card p-2 shadow-xl">
+            <div className="flex items-center justify-between px-2 py-2">
+              <b className="text-sm">Thông báo</b>
+              <button onClick={markAll} className="text-[10px] text-orange-600">
+                Đánh dấu tất cả đã đọc
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {items.length ? (
+                items.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => markRead(item)}
+                    className={`block w-full rounded-lg p-3 text-left ${item.isRead ? "opacity-60" : "bg-orange-50"}`}
+                  >
+                    <p className="text-xs font-semibold">{item.title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.message}
+                    </p>
+                  </button>
+                ))
+              ) : (
+                <p className="p-4 text-center text-xs text-muted-foreground">
+                  Chưa có thông báo mới.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-50 w-[min(92vw,360px)] rounded-xl border border-orange-200 bg-card p-4 shadow-2xl"
+        >
+          <button
+            aria-label="Đóng thông báo"
+            onClick={() => setToast(null)}
+            className="absolute right-2 top-2"
+          >
+            <X className="size-3" />
+          </button>
+          <p className="pr-4 text-xs font-semibold">{toast.title}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{toast.message}</p>
+          <button
+            onClick={() => markRead(toast)}
+            className="mt-3 text-xs font-medium text-orange-600"
+          >
+            Xem chi tiết
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RoleDrawer({
+  role,
+  view,
+  open,
+  onClose,
+  onNavigate,
+}: {
+  role: UserRole;
+  view: string;
+  open: boolean;
+  onClose: () => void;
+  onNavigate: (view: string) => void;
+}) {
+  const items: Array<[string, typeof LayoutDashboard, string]> =
+    role === "lead"
+      ? [
+          ["Tổng quan", LayoutDashboard, "Tổng quan Lead Control Center"],
+          ["Dashboard thống kê", BarChart3, "Dashboard thống kê & KPI"],
+          ["Duyệt content", FileCheck2, "Duyệt Ý tưởng / Content"],
+          ["Duyệt video", Video, "Duyệt Video"],
+          ["Kho lưu trữ", Archive, "Kho lưu trữ"],
+          [
+            "Cấu hình hệ thống",
+            Settings,
+            "Cấu hình hệ thống & Quản lý nhân sự",
+          ],
+        ]
+      : role === "content"
+        ? [
+            [
+              "Tất cả Content / Viết Kịch Bản",
+              LayoutDashboard,
+              "Tổng quan Content Workspace",
+            ],
+            ["Kho Lưu Trữ", Archive, "Kho Lưu Trữ Ý Tưởng"],
+            ["Feedback & Trao Đổi", MessageCircle, "Feedback & Yêu cầu sửa"],
+          ]
+        : ([
+            [
+              "Lịch Quay & Dựng Video",
+              LayoutDashboard,
+              "Lịch Quay & Dựng Video",
+            ],
+            [
+              "Cần Feedback / Sửa Video",
+              AlertCircle,
+              "Cần Feedback / Sửa Video",
+            ],
+            ["Danh sách bài đăng", CheckSquare, "Danh sách bài đã đăng"],
+            ["Feedback & Trao Đổi", MessageCircle, "Feedback & Trao Đổi"],
+          ] as const);
+  return (
+    <>
+      {open && (
+        <button
+          aria-label="Đóng menu"
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={onClose}
+        />
+      )}
+      {open && (
+        <aside
+          aria-label="Menu điều hướng"
+          className="fixed inset-y-0 left-0 z-40 w-80 max-w-[86vw] border-r border-stone-200 bg-white p-5 shadow-xl"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-amber-600">
+                HAPPYORSAD
+              </p>
+              <h2 className="mt-1 text-lg font-bold text-zinc-900">
+                Menu workspace
+              </h2>
+            </div>
+            <button
+              aria-label="Đóng menu"
+              onClick={onClose}
+              className="rounded-lg p-2 text-zinc-600 hover:bg-stone-100"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </div>
+          <nav className="mt-8 flex flex-col gap-1">
+            {items.map(([id, Icon, label]) => (
+              <button
+                key={id}
+                onClick={() => {
+                  onNavigate(id);
+                  onClose();
+                }}
+                className={`flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors ${view === id ? "bg-amber-50 font-semibold text-amber-600" : "text-zinc-700 hover:bg-stone-100"}`}
+              >
+                <Icon aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
+      )}
+    </>
+  );
 }
 
 function GreetingWeatherBanner() {
-  const [today, setToday] = useState('')
+  const [today, setToday] = useState("");
   useEffect(() => {
-    setToday(new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date()))
-  }, [])
-  return <section aria-label="Lời chào và thời tiết Hà Nội" className="mb-4 flex w-full flex-col gap-2 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-2.5 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"><div className="flex items-baseline gap-1 text-sm font-medium text-stone-700 md:text-base"><span>Hi how do you feel today?</span><span className="ml-1 font-serif italic text-stone-500 opacity-70">*happy or sad*</span></div><div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-zinc-700"><span className="flex items-center gap-1"><MapPin className="size-3.5 text-amber-600" aria-hidden="true" />Hà Nội</span><span className="hidden text-stone-400 sm:inline" aria-hidden="true">·</span><span className="flex items-center gap-1"><CloudSun className="size-4 text-amber-500" aria-hidden="true" />28°C · Nắng nhẹ</span><span className="hidden text-stone-400 md:inline" aria-hidden="true">·</span><span className="flex items-center gap-1"><CalendarDays className="size-3.5 text-amber-600" aria-hidden="true" />{today || 'Hôm nay'}</span></div></section>
+    setToday(
+      new Intl.DateTimeFormat("vi-VN", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(new Date()),
+    );
+  }, []);
+  return (
+    <section
+      aria-label="Lời chào và thời tiết Hà Nội"
+      className="mb-4 flex w-full flex-col gap-2 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-2.5 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex items-baseline gap-1 text-sm font-medium text-stone-700 md:text-base">
+        <span>Hi how do you feel today?</span>
+        <span className="ml-1 font-serif italic text-stone-500 opacity-70">
+          *happy or sad*
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-zinc-700">
+        <span className="flex items-center gap-1">
+          <MapPin className="size-3.5 text-amber-600" aria-hidden="true" />
+          Hà Nội
+        </span>
+        <span className="hidden text-stone-400 sm:inline" aria-hidden="true">
+          ·
+        </span>
+        <span className="flex items-center gap-1">
+          <CloudSun className="size-4 text-amber-500" aria-hidden="true" />
+          28°C · Nắng nhẹ
+        </span>
+        <span className="hidden text-stone-400 md:inline" aria-hidden="true">
+          ·
+        </span>
+        <span className="flex items-center gap-1">
+          <CalendarDays
+            className="size-3.5 text-amber-600"
+            aria-hidden="true"
+          />
+          {today || "Hôm nay"}
+        </span>
+      </div>
+    </section>
+  );
 }
 
-function Workspace({ role, user, onLogout }: { role: UserRole; user: User; onLogout: () => void }) {
-  const [view, setView] = useState(role === 'lead' ? 'Tổng quan' : role === 'content' ? 'Tất cả Content / Viết Kịch Bản' : 'Lịch Quay & Dựng Video'); const [openItemId, setOpenItemId] = useState<string>()
-  const [profileOpen, setProfileOpen] = useState(false); const [drawerOpen, setDrawerOpen] = useState(false)
-  const views = role === 'lead' ? ['Tổng quan', 'Dashboard thống kê', 'Duyệt content', 'Duyệt video', 'Kho lưu trữ', 'Viết kịch bản chi tiết', 'Lịch quay', 'Sân dựng video', 'Cấu hình hệ thống', 'Quản lý nhân sự'] : role === 'content' ? ['Tất cả Content / Viết Kịch Bản', 'Kho Lưu Trữ'] : ['Lịch Quay & Dựng Video', 'Cần Feedback / Sửa Video', 'Danh sách bài đăng', 'Feedback & Trao Đổi']
-  if (role === 'lead' && view === 'Quản lý nhân sự') return <UserManagement user={user} onBack={() => setView('Cấu hình hệ thống')} />
-  return <div className="min-h-screen bg-background text-foreground transition-colors"><header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 bg-white/95 px-4 sm:px-7"><div className="flex items-center gap-3"><button type="button" aria-label="Mở menu điều hướng" onClick={() => setDrawerOpen(true)} className="rounded-lg border border-stone-200 bg-white p-2 text-zinc-900 hover:bg-stone-100"><Menu aria-hidden="true" /></button><Clapperboard className="size-5 text-orange-500" /><span className="text-sm font-semibold text-zinc-900">{view}</span></div><div className="relative flex items-center gap-3"><NotificationCenter user={user} onNavigate={(linkId, targetView) => { if (linkId) setOpenItemId(linkId); setView(targetView || (role === 'creator' ? 'Cần Feedback / Sửa Video' : role === 'content' ? 'Tất c�� Content / Viết Kịch Bản' : 'Duyệt video')) }} /><button onClick={() => setProfileOpen((open) => !open)} className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-left" aria-expanded={profileOpen}><span className="grid size-8 place-items-center overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-700">{user.photoURL ? <img src={user.photoURL} alt="Ảnh đại diện" className="size-full object-cover" /> : (user.displayName || roleNames[role]).slice(0, 2).toUpperCase()}</span><span className="hidden text-right sm:block"><p className="text-xs font-medium">{user.displayName || roleNames[role]}</p><span className="text-[10px] text-orange-500">{roleLabels[role]}</span></span></button>{profileOpen && <ProfileMenu user={user} role={role} onLogout={onLogout} onClose={() => setProfileOpen(false)} />}</div></header><RoleDrawer role={role} view={view} open={drawerOpen} onClose={() => setDrawerOpen(false)} onNavigate={setView} /><div className="mx-auto max-w-7xl px-4 pt-4 sm:px-7"><GreetingWeatherBanner /></div><div className="mx-auto flex max-w-7xl"><aside className="hidden w-60 shrink-0 border-r border-border p-4 lg:block"><div className="mb-8 flex items-center gap-2 font-semibold"><div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Clapperboard className="size-4" /></div>HAPPYORSAD</div><p className="mb-3 px-2 text-[10px] uppercase tracking-widest text-muted-foreground">{roleLabels[role]} workspace</p><nav className="flex flex-col gap-1">{views.map((v) => <button key={v} onClick={() => setView(v)} className={`rounded-lg px-3 py-2.5 text-left text-xs ${view === v ? 'bg-accent font-medium' : 'text-muted-foreground hover:bg-accent/60'}`}>{v}</button>)}</nav></aside><main className="min-w-0 flex-1 p-4 sm:p-7"><div className="mb-5 flex gap-2 overflow-x-auto lg:hidden">{views.map((v) => <button key={v} onClick={() => setView(v)} className={`shrink-0 rounded-full border px-3 py-2 text-xs ${view === v ? 'border-orange-400 bg-orange-400/10' : 'border-border'}`}>{v}</button>)}</div>{(role === 'content' || (role === 'lead' && ['Tạo ý tưởng', 'Viết kịch bản chi tiết'].includes(view))) ? <ContentWorkspace user={user} view={view} canManageAll={role === 'lead'} /> : (role === 'creator' || (role === 'lead' && ['Lịch quay', 'Sân dựng video'].includes(view))) ? <CreatorWorkspace user={user} view={view} onViewChange={setView} /> : <LeadWorkspace user={user} view={view} openItemId={openItemId} />}</main></div></div>
+function Workspace({
+  role,
+  user,
+  onLogout,
+}: {
+  role: UserRole;
+  user: User;
+  onLogout: () => void;
+}) {
+  const [view, setView] = useState(
+    role === "lead"
+      ? "Tổng quan"
+      : role === "content"
+        ? "Tất cả Content / Viết Kịch Bản"
+        : "Lịch Quay & Dựng Video",
+  );
+  const [openItemId, setOpenItemId] = useState<string>();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const views =
+    role === "lead"
+      ? [
+          "Tổng quan",
+          "Dashboard thống kê",
+          "Duyệt content",
+          "Duyệt video",
+          "Kho lưu trữ",
+          "Viết kịch bản chi tiết",
+          "Lịch quay",
+          "Sân dựng video",
+          "Cấu hình hệ thống",
+          "Quản lý nhân sự",
+        ]
+      : role === "content"
+        ? ["Tất cả Content / Viết Kịch Bản", "Kho Lưu Trữ"]
+        : [
+            "Lịch Quay & Dựng Video",
+            "Cần Feedback / Sửa Video",
+            "Danh sách bài đăng",
+            "Feedback & Trao Đổi",
+          ];
+  if (role === "lead" && view === "Quản lý nhân sự")
+    return (
+      <UserManagement user={user} onBack={() => setView("Cấu hình hệ thống")} />
+    );
+  return (
+    <div className="min-h-screen bg-background text-foreground transition-colors">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 bg-white/95 px-4 sm:px-7">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Mở menu điều hướng"
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-lg border border-stone-200 bg-white p-2 text-zinc-900 hover:bg-stone-100"
+          >
+            <Menu aria-hidden="true" />
+          </button>
+          <Clapperboard className="size-5 text-orange-500" />
+          <span className="text-sm font-semibold text-zinc-900">{view}</span>
+        </div>
+        <div className="relative flex items-center gap-3">
+          <NotificationCenter
+            user={user}
+            onNavigate={(linkId, targetView) => {
+              if (linkId) setOpenItemId(linkId);
+              setView(
+                targetView ||
+                  (role === "creator"
+                    ? "Cần Feedback / Sửa Video"
+                    : role === "content"
+                      ? "Tất c�� Content / Viết Kịch Bản"
+                      : "Duyệt video"),
+              );
+            }}
+          />
+          <button
+            onClick={() => setProfileOpen((open) => !open)}
+            className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5 text-left"
+            aria-expanded={profileOpen}
+          >
+            <span className="grid size-8 place-items-center overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-700">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt="Ảnh đại diện"
+                  className="size-full object-cover"
+                />
+              ) : (
+                (user.displayName || roleNames[role]).slice(0, 2).toUpperCase()
+              )}
+            </span>
+            <span className="hidden text-right sm:block">
+              <p className="text-xs font-medium">
+                {user.displayName || roleNames[role]}
+              </p>
+              <span className="text-[10px] text-orange-500">
+                {roleLabels[role]}
+              </span>
+            </span>
+          </button>
+          {profileOpen && (
+            <ProfileMenu
+              user={user}
+              role={role}
+              onLogout={onLogout}
+              onClose={() => setProfileOpen(false)}
+            />
+          )}
+        </div>
+      </header>
+      <RoleDrawer
+        role={role}
+        view={view}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onNavigate={setView}
+      />
+      <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-7">
+        <GreetingWeatherBanner />
+      </div>
+      <div className="mx-auto flex max-w-7xl">
+        <aside className="hidden w-60 shrink-0 border-r border-border p-4 lg:block">
+          <div className="mb-8 flex items-center gap-2 font-semibold">
+            <div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <Clapperboard className="size-4" />
+            </div>
+            HAPPYORSAD
+          </div>
+          <p className="mb-3 px-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+            {roleLabels[role]} workspace
+          </p>
+          <nav className="flex flex-col gap-1">
+            {views.map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`rounded-lg px-3 py-2.5 text-left text-xs ${view === v ? "bg-accent font-medium" : "text-muted-foreground hover:bg-accent/60"}`}
+              >
+                {v}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <main className="min-w-0 flex-1 p-4 sm:p-7">
+          <div className="mb-5 flex gap-2 overflow-x-auto lg:hidden">
+            {views.map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs ${view === v ? "border-orange-400 bg-orange-400/10" : "border-border"}`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          {role === "content" ||
+          (role === "lead" &&
+            ["Tạo ý tưởng", "Viết kịch bản chi tiết"].includes(view)) ? (
+            <ContentWorkspace
+              user={user}
+              view={view}
+              canManageAll={role === "lead"}
+            />
+          ) : role === "creator" ||
+            (role === "lead" &&
+              ["Lịch quay", "Sân dựng video"].includes(view)) ? (
+            <CreatorWorkspace user={user} view={view} onViewChange={setView} />
+          ) : (
+            <LeadWorkspace user={user} view={view} openItemId={openItemId} />
+          )}
+        </main>
+      </div>
+    </div>
+  );
 }
 
-function ProfileMenu({ user, role, onLogout, onClose }: { user: User; role: UserRole; onLogout: () => void; onClose: () => void }) {
-  const [open, setOpen] = useState(false)
-  return <>{<div className="absolute right-0 top-12 z-30 w-56 rounded-xl border border-border bg-card p-2 shadow-lg"><button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"><UserRound className="size-4 text-muted-foreground" aria-hidden="true" /><span><b>Trang cá nhân</b><small className="mt-0.5 block text-muted-foreground">{user.email}</small></span></button><button onClick={onLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-destructive/10"><LogOut className="size-4" />Đăng xuất</button></div>}{open && <ProfileModal user={user} role={role} onClose={() => { setOpen(false); onClose() }} />}</>
+function ProfileMenu({
+  user,
+  role,
+  onLogout,
+  onClose,
+}: {
+  user: User;
+  role: UserRole;
+  onLogout: () => void;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {
+        <div className="absolute right-0 top-12 z-30 w-56 rounded-xl border border-border bg-card p-2 shadow-lg">
+          <button
+            onClick={() => setOpen(true)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs hover:bg-accent"
+          >
+            <UserRound
+              className="size-4 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <span>
+              <b>Trang cá nhân</b>
+              <small className="mt-0.5 block text-muted-foreground">
+                {user.email}
+              </small>
+            </span>
+          </button>
+          <button
+            onClick={onLogout}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-xs text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="size-4" />
+            Đăng xuất
+          </button>
+        </div>
+      }
+      {open && (
+        <ProfileModal
+          user={user}
+          role={role}
+          onClose={() => {
+            setOpen(false);
+            onClose();
+          }}
+        />
+      )}
+    </>
+  );
 }
 
-function ProfileModal({ user, role, onClose }: { user: User; role: UserRole; onClose: () => void }) {
-  const [tab, setTab] = useState<'profile' | 'password'>('profile'); const [name, setName] = useState(user.displayName || ''); const [photo, setPhoto] = useState(user.photoURL || ''); const [current, setCurrent] = useState(''); const [next, setNext] = useState(''); const [confirm, setConfirm] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
-  const presets = ['https://api.dicebear.com/9.x/initials/svg?seed=Happy', 'https://api.dicebear.com/9.x/initials/svg?seed=Creative', 'https://api.dicebear.com/9.x/initials/svg?seed=Studio']
-  const saveProfile = async () => { if (!name.trim()) return setError('Vui lòng nhập tên hiển thị.'); setBusy(true); setError(''); try { await updateProfile(user, { displayName: name.trim(), photoURL: photo || null }); await setDoc(doc(db, 'users', user.uid), { name: name.trim(), photoURL: photo || null }, { merge: true }); setMessage('Đã lưu thông tin cá nhân.') } catch { setError('Không thể cập nhật hồ sơ. Vui lòng thử lại.')} finally { setBusy(false) } }
-  const changePassword = async () => { if (next.length < 6) return setError('Mật khẩu mới phải có ít nhất 6 ký tự.'); if (next !== confirm) return setError('Mật khẩu xác nhận không khớp.'); setBusy(true); setError(''); try { if (!user.email) throw new Error('missing-email'); await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, current)); await updatePassword(user, next); setCurrent(''); setNext(''); setConfirm(''); setMessage('Đổi mật khẩu thành công!') } catch { setError('Mật khẩu hiện tại không đúng hoặc phiên đăng nhập đã hết hạn.')} finally { setBusy(false) } }
-  const chooseFile = (file?: File) => { if (!file) return; if (file.size > 800000) return setError('Ảnh đại diện cần nhỏ hơn 800KB.'); const reader = new FileReader(); reader.onload = () => setPhoto(String(reader.result)); reader.readAsDataURL(file) }
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"><section role="dialog" aria-modal="true" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-5 shadow-xl sm:p-6"><div className="flex items-start justify-between"><div><p className="text-xs uppercase tracking-widest text-orange-500">{roleLabels[role]}</p><h2 className="mt-1 text-xl font-semibold">Trang cá nhân & cài đặt</h2></div><button onClick={onClose} aria-label="Đóng"><X className="size-4" /></button></div><div className="mt-5 flex gap-1 rounded-lg bg-accent p-1"><button onClick={() => setTab('profile')} className={`flex-1 rounded-md py-2 text-xs ${tab === 'profile' ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground'}`}>Thông tin cá nhân</button><button onClick={() => setTab('password')} className={`flex-1 rounded-md py-2 text-xs ${tab === 'password' ? 'bg-card font-medium shadow-sm' : 'text-muted-foreground'}`}>Đổi mật khẩu</button></div>{message && <p role="status" className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-700">{message}</p>}{error && <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-3 text-xs text-destructive">{error}</p>}{tab === 'profile' ? <div className="mt-5"><label className="text-xs font-medium">Tên hiển thị<input value={name} onChange={(e) => setName(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label><div className="mt-5"><p className="text-xs font-medium">Ảnh đại diện</p><div className="mt-3 flex items-center gap-3"><span className="grid size-16 place-items-center overflow-hidden rounded-full bg-orange-100 text-sm font-semibold text-orange-700">{photo ? <img src={photo} alt="Xem trước ảnh đại diện" className="size-full object-cover" /> : name.slice(0, 2).toUpperCase()}</span><label className="cursor-pointer rounded-lg border border-border px-3 py-2 text-xs">Tải ảnh lên<input type="file" accept="image/*" className="sr-only" onChange={(e) => chooseFile(e.target.files?.[0])} /></label></div><div className="mt-3 flex gap-2">{presets.map((preset) => <button key={preset} type="button" onClick={() => setPhoto(preset)} className="size-10 overflow-hidden rounded-full border-2 border-transparent hover:border-orange-400"><img src={preset} alt="Mẫu avatar" className="size-full" /></button>)}</div></div><button disabled={busy} onClick={saveProfile} className="mt-6 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">{busy ? 'Đang lưu...' : 'Lưu thay đổi'}</button></div> : <div className="mt-5 flex flex-col gap-4"><Field label="Mật khẩu hiện tại" value={current} onChange={setCurrent} placeholder="••••••••" type="password" /><Field label="Mật khẩu mới" value={next} onChange={setNext} placeholder="Tối thiểu 6 ký tự" type="password" /><Field label="Xác nhận mật khẩu mới" value={confirm} onChange={setConfirm} placeholder="Nhập lại mật khẩu" type="password" /><button disabled={busy} onClick={changePassword} className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">{busy ? 'Đang cập nhật...' : 'Đổi mật khẩu'}</button></div>}</section></div>
+function ProfileModal({
+  user,
+  role,
+  onClose,
+}: {
+  user: User;
+  role: UserRole;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"profile" | "password">("profile");
+  const [name, setName] = useState(user.displayName || "");
+  const [photo, setPhoto] = useState(user.photoURL || "");
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const presets = [
+    "https://api.dicebear.com/9.x/initials/svg?seed=Happy",
+    "https://api.dicebear.com/9.x/initials/svg?seed=Creative",
+    "https://api.dicebear.com/9.x/initials/svg?seed=Studio",
+  ];
+  const saveProfile = async () => {
+    if (!name.trim()) return setError("Vui lòng nhập tên hiển thị.");
+    setBusy(true);
+    setError("");
+    try {
+      await updateProfile(user, {
+        displayName: name.trim(),
+        photoURL: photo || null,
+      });
+      await setDoc(
+        doc(db, "users", user.uid),
+        { name: name.trim(), photoURL: photo || null },
+        { merge: true },
+      );
+      setMessage("Đã lưu thông tin cá nhân.");
+    } catch {
+      setError("Không thể cập nhật hồ sơ. Vui lòng thử lại.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const changePassword = async () => {
+    if (next.length < 6)
+      return setError("Mật khẩu mới phải có ít nhất 6 ký tự.");
+    if (next !== confirm) return setError("Mật khẩu xác nhận không khớp.");
+    setBusy(true);
+    setError("");
+    try {
+      if (!user.email) throw new Error("missing-email");
+      await reauthenticateWithCredential(
+        user,
+        EmailAuthProvider.credential(user.email, current),
+      );
+      await updatePassword(user, next);
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      setMessage("Đổi mật khẩu thành công!");
+    } catch {
+      setError("Mật khẩu hiện tại không đúng hoặc phiên đăng nhập đã hết hạn.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const chooseFile = (file?: File) => {
+    if (!file) return;
+    if (file.size > 800000) return setError("Ảnh đại diện cần nhỏ hơn 800KB.");
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(String(reader.result));
+    reader.readAsDataURL(file);
+  };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-5 shadow-xl sm:p-6"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-orange-500">
+              {roleLabels[role]}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">
+              Trang cá nhân & cài đặt
+            </h2>
+          </div>
+          <button onClick={onClose} aria-label="Đóng">
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="mt-5 flex gap-1 rounded-lg bg-accent p-1">
+          <button
+            onClick={() => setTab("profile")}
+            className={`flex-1 rounded-md py-2 text-xs ${tab === "profile" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+          >
+            Thông tin cá nhân
+          </button>
+          <button
+            onClick={() => setTab("password")}
+            className={`flex-1 rounded-md py-2 text-xs ${tab === "password" ? "bg-card font-medium shadow-sm" : "text-muted-foreground"}`}
+          >
+            Đổi mật khẩu
+          </button>
+        </div>
+        {message && (
+          <p
+            role="status"
+            className="mt-4 rounded-lg bg-emerald-500/10 p-3 text-xs text-emerald-700"
+          >
+            {message}
+          </p>
+        )}
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-lg bg-destructive/10 p-3 text-xs text-destructive"
+          >
+            {error}
+          </p>
+        )}
+        {tab === "profile" ? (
+          <div className="mt-5">
+            <label className="text-xs font-medium">
+              Tên hiển thị
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              />
+            </label>
+            <div className="mt-5">
+              <p className="text-xs font-medium">Ảnh đại diện</p>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="grid size-16 place-items-center overflow-hidden rounded-full bg-orange-100 text-sm font-semibold text-orange-700">
+                  {photo ? (
+                    <img
+                      src={photo}
+                      alt="Xem trước ảnh đại diện"
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    name.slice(0, 2).toUpperCase()
+                  )}
+                </span>
+                <label className="cursor-pointer rounded-lg border border-border px-3 py-2 text-xs">
+                  Tải ảnh lên
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(e) => chooseFile(e.target.files?.[0])}
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex gap-2">
+                {presets.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setPhoto(preset)}
+                    className="size-10 overflow-hidden rounded-full border-2 border-transparent hover:border-orange-400"
+                  >
+                    <img src={preset} alt="Mẫu avatar" className="size-full" />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              disabled={busy}
+              onClick={saveProfile}
+              className="mt-6 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+            >
+              {busy ? "Đang lưu..." : "Lưu thay đổi"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-5 flex flex-col gap-4">
+            <Field
+              label="Mật khẩu hiện tại"
+              value={current}
+              onChange={setCurrent}
+              placeholder="••••••••"
+              type="password"
+            />
+            <Field
+              label="Mật khẩu mới"
+              value={next}
+              onChange={setNext}
+              placeholder="Tối thiểu 6 ký tự"
+              type="password"
+            />
+            <Field
+              label="Xác nhận mật khẩu mới"
+              value={confirm}
+              onChange={setConfirm}
+              placeholder="Nhập lại mật khẩu"
+              type="password"
+            />
+            <button
+              disabled={busy}
+              onClick={changePassword}
+              className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+            >
+              {busy ? "Đang cập nhật..." : "Đổi mật khẩu"}
+            </button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
-type TeamMember = { id: string; name?: string; email?: string; role?: UserRole; createdAt?: { toDate?: () => Date } | null; status?: string }
+type TeamMember = {
+  id: string;
+  name?: string;
+  email?: string;
+  role?: UserRole;
+  createdAt?: { toDate?: () => Date } | null;
+  status?: string;
+};
 
 function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
-  const [members, setMembers] = useState<TeamMember[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: 'HappyOrSad@2025', role: 'content' as 'content' | 'creator' })
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  useEffect(() => onSnapshot(collection(db, 'users'), (snap) => setMembers(snap.docs.map((item) => ({ id: item.id, ...item.data() } as TeamMember)))), [])
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "HappyOrSad@2025",
+    role: "content" as "content" | "creator",
+  });
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  useEffect(
+    () =>
+      onSnapshot(collection(db, "users"), (snap) =>
+        setMembers(
+          snap.docs.map(
+            (item) => ({ id: item.id, ...item.data() }) as TeamMember,
+          ),
+        ),
+      ),
+    [],
+  );
   const createMember = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setMessage(''); setError('')
-    try { await createTeamMemberAccount(form); setMessage(`Đã tạo tài khoản thành công cho ${form.name}!`); setForm({ name: '', email: '', password: 'HappyOrSad@2025', role: 'content' }); setShowForm(false) }
-    catch (e: any) { setError(e?.code === 'auth/email-already-in-use' ? 'Email này đã tồn tại trong Firebase Authentication.' : `Không thể tạo tài khoản (${e?.code ?? 'unknown'}).`) }
-    finally { setBusy(false) }
-  }
-  const changeRole = async (member: TeamMember, nextRole: UserRole) => { await setDoc(doc(db, 'users', member.id), { role: nextRole }, { merge: true }) }
-  const lockMember = async (member: TeamMember) => { await setDoc(doc(db, 'users', member.id), { status: member.status === 'locked' ? 'active' : 'locked' }, { merge: true }) }
-  return <main className="min-h-screen bg-background p-4 text-foreground sm:p-7"><div className="mx-auto max-w-5xl"><div className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><button onClick={onBack} className="mb-4 text-xs text-muted-foreground hover:text-foreground">← Quay lại Cấu hình hệ thống</button><p className="text-xs uppercase tracking-widest text-orange-500">Lead workspace</p><h1 className="mt-1 text-2xl font-semibold">Quản lý nhân sự</h1><p className="mt-2 text-sm text-muted-foreground">Tạo và quản lý tài khoản Content, Creator trong workspace.</p></div><button onClick={() => setShowForm(true)} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground"><Plus className="size-4" />Thêm nhân sự mới</button></div>{message && <p role="status" className="mb-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</p>}{error && <p role="alert" className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}<div className="overflow-x-auto rounded-xl border border-border bg-card"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-border text-xs text-muted-foreground"><tr><th className="p-4">Nhân sự</th><th className="p-4">Email</th><th className="p-4">Vai trò</th><th className="p-4">Ngày tạo</th><th className="p-4">Trạng thái</th><th className="p-4">Thao tác</th></tr></thead><tbody>{members.map((member) => <tr key={member.id} className="border-b border-border last:border-0"><td className="p-4 font-medium">{member.name || 'Chưa cập nhật'}</td><td className="p-4 text-muted-foreground">{member.email || member.id}</td><td className="p-4">{member.id === user.uid ? <span className="text-xs">Lead</span> : <select value={member.role || 'content'} onChange={(e) => changeRole(member, e.target.value as UserRole)} className="rounded-md border border-border bg-background px-2 py-1 text-xs"><option value="content">Content</option><option value="creator">Creator</option><option value="lead">Lead</option></select>}</td><td className="p-4 text-xs text-muted-foreground">{member.createdAt?.toDate ? member.createdAt.toDate().toLocaleDateString('vi-VN') : '—'}</td><td className="p-4 text-xs">{member.status === 'locked' ? 'Đã khóa' : 'Đang hoạt động'}</td><td className="p-4">{member.id !== user.uid && <button onClick={() => lockMember(member)} className="rounded-md border border-border px-2 py-1 text-xs">{member.status === 'locked' ? 'Mở khóa' : 'Khóa'}</button>}</td></tr>)}</tbody></table>{!members.length && <p className="p-10 text-center text-sm text-muted-foreground">Chưa có tài khoản nhân sự.</p>}</div>{showForm && <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4"><form onSubmit={createMember} className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl"><div className="mb-5 flex items-center justify-between"><h2 className="font-semibold">Thêm nhân sự mới</h2><button type="button" onClick={() => setShowForm(false)} aria-label="Đóng"><X className="size-4" /></button></div><div className="flex flex-col gap-4"><Field label="Họ và tên" value={form.name} onChange={(value) => setForm({ ...form, name: value })} placeholder="Nguyễn Văn A" /><Field label="Email đăng nhập" value={form.email} onChange={(value) => setForm({ ...form, email: value })} placeholder="content2@happyorsad.vn" /><Field label="Mật khẩu khởi tạo" value={form.password} onChange={(value) => setForm({ ...form, password: value })} placeholder="HappyOrSad@2025" /><label className="text-xs font-medium">Vai trò<select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'content' | 'creator' })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"><option value="content">Content</option><option value="creator">Creator</option></select></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-border px-4 py-2 text-xs">Hủy</button><button disabled={busy} className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">{busy ? 'Đang tạo...' : 'Xác nhận tạo'}</button></div></form></div>}</div></main>
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      await createTeamMemberAccount(form);
+      setMessage(`Đã tạo tài khoản thành công cho ${form.name}!`);
+      setForm({
+        name: "",
+        email: "",
+        password: "HappyOrSad@2025",
+        role: "content",
+      });
+      setShowForm(false);
+    } catch (e: any) {
+      setError(
+        e?.code === "auth/email-already-in-use"
+          ? "Email này đã tồn tại trong Firebase Authentication."
+          : `Không thể tạo tài khoản (${e?.code ?? "unknown"}).`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const changeRole = async (member: TeamMember, nextRole: UserRole) => {
+    await setDoc(
+      doc(db, "users", member.id),
+      { role: nextRole },
+      { merge: true },
+    );
+  };
+  const lockMember = async (member: TeamMember) => {
+    await setDoc(
+      doc(db, "users", member.id),
+      { status: member.status === "locked" ? "active" : "locked" },
+      { merge: true },
+    );
+  };
+  return (
+    <main className="min-h-screen bg-background p-4 text-foreground sm:p-7">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <button
+              onClick={onBack}
+              className="mb-4 text-xs text-muted-foreground hover:text-foreground"
+            >
+              ← Quay lại Cấu hình hệ thống
+            </button>
+            <p className="text-xs uppercase tracking-widest text-orange-500">
+              Lead workspace
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold">Quản lý nhân sự</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Tạo và quản lý tài khoản Content, Creator trong workspace.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground"
+          >
+            <Plus className="size-4" />
+            Thêm nhân sự mới
+          </button>
+        </div>
+        {message && (
+          <p
+            role="status"
+            className="mb-4 rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-700"
+          >
+            {message}
+          </p>
+        )}
+        {error && (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        )}
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full min-w-[680px] text-left text-sm">
+            <thead className="border-b border-border text-xs text-muted-foreground">
+              <tr>
+                <th className="p-4">Nhân sự</th>
+                <th className="p-4">Email</th>
+                <th className="p-4">Vai trò</th>
+                <th className="p-4">Ngày tạo</th>
+                <th className="p-4">Trạng thái</th>
+                <th className="p-4">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <tr
+                  key={member.id}
+                  className="border-b border-border last:border-0"
+                >
+                  <td className="p-4 font-medium">
+                    {member.name || "Chưa cập nhật"}
+                  </td>
+                  <td className="p-4 text-muted-foreground">
+                    {member.email || member.id}
+                  </td>
+                  <td className="p-4">
+                    {member.id === user.uid ? (
+                      <span className="text-xs">Lead</span>
+                    ) : (
+                      <select
+                        value={member.role || "content"}
+                        onChange={(e) =>
+                          changeRole(member, e.target.value as UserRole)
+                        }
+                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                      >
+                        <option value="content">Content</option>
+                        <option value="creator">Creator</option>
+                        <option value="lead">Lead</option>
+                      </select>
+                    )}
+                  </td>
+                  <td className="p-4 text-xs text-muted-foreground">
+                    {member.createdAt?.toDate
+                      ? member.createdAt.toDate().toLocaleDateString("vi-VN")
+                      : "—"}
+                  </td>
+                  <td className="p-4 text-xs">
+                    {member.status === "locked" ? "Đã khóa" : "Đang hoạt động"}
+                  </td>
+                  <td className="p-4">
+                    {member.id !== user.uid && (
+                      <button
+                        onClick={() => lockMember(member)}
+                        className="rounded-md border border-border px-2 py-1 text-xs"
+                      >
+                        {member.status === "locked" ? "Mở khóa" : "Khóa"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!members.length && (
+            <p className="p-10 text-center text-sm text-muted-foreground">
+              Chưa có tài khoản nhân sự.
+            </p>
+          )}
+        </div>
+        {showForm && (
+          <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4">
+            <form
+              onSubmit={createMember}
+              className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl"
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="font-semibold">Thêm nhân sự mới</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  aria-label="Đóng"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="flex flex-col gap-4">
+                <Field
+                  label="Họ và tên"
+                  value={form.name}
+                  onChange={(value) => setForm({ ...form, name: value })}
+                  placeholder="Nguyễn Văn A"
+                />
+                <Field
+                  label="Email đăng nhập"
+                  value={form.email}
+                  onChange={(value) => setForm({ ...form, email: value })}
+                  placeholder="content2@happyorsad.vn"
+                />
+                <Field
+                  label="Mật khẩu khởi tạo"
+                  value={form.password}
+                  onChange={(value) => setForm({ ...form, password: value })}
+                  placeholder="HappyOrSad@2025"
+                />
+                <label className="text-xs font-medium">
+                  Vai trò
+                  <select
+                    value={form.role}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        role: e.target.value as "content" | "creator",
+                      })
+                    }
+                    className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="content">Content</option>
+                    <option value="creator">Creator</option>
+                  </select>
+                </label>
+              </div>
+              <div className="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="rounded-lg border border-border px-4 py-2 text-xs"
+                >
+                  Hủy
+                </button>
+                <button
+                  disabled={busy}
+                  className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+                >
+                  {busy ? "Đang tạo..." : "Xác nhận tạo"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+    </main>
+  );
 }
 
-function ContentWorkspace({ user, view, canManageAll = false }: { user: User; view: string; canManageAll?: boolean }) {
-  const [items, setItems] = useState<Item[]>(demoItems); const [selected, setSelected] = useState<Item | null>(null); const [toast, setToast] = useState(''); const [showForm, setShowForm] = useState(false); const [settings, setSettings] = useState({ platforms: platformOptions, contentTypes, goals: ['Tăng tương tác', 'Chuyển đổi', 'Branding'] }); const [saving, setSaving] = useState(false); const [ideaDraft, setIdeaDraft] = useState<{ title?: string; description?: string }>(); const [contentFilter, setContentFilter] = useState<'all' | 'pending' | 'scripting' | 'archived'>('all')
-  useEffect(() => { const source = canManageAll ? collection(db, 'contentItems') : query(collection(db, 'contentItems'), where('ownerId', '==', user.uid)); return onSnapshot(source, (snap) => { const remote = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Item)); setItems(remote) }, () => undefined) }, [user.uid, canManageAll]); useEffect(() => onSnapshot(doc(db, 'app_settings', 'workflow'), (snap) => { if (snap.exists()) setSettings((old) => ({ ...old, ...(snap.data() as Partial<typeof old>) })) }, () => undefined), [])
-  const itemTime = (value: unknown) => { if (value && typeof value === 'object' && 'toMillis' in value && typeof value.toMillis === 'function') return value.toMillis(); if (typeof value === 'string' || typeof value === 'number') return new Date(value).getTime() || 0; return 0 }
-  const contentStats = useMemo(() => ({ all: items.filter((i) => i.status !== 'rejected').length, pending: items.filter((i) => ['idea_pending', 'idea_needs_revision'].includes(i.status)).length, scripting: items.filter((i) => ['scripting', 'approved_idea'].includes(i.status)).length, archived: items.filter((i) => i.status === 'archived').length }), [items])
-  const visible = useMemo(() => { const isArchiveView = view === 'Kho Lưu Trữ' || contentFilter === 'archived'; const base = isArchiveView ? items.filter((i) => i.status === 'archived') : items.filter((i) => ['idea_pending', 'idea_needs_revision', 'pending_approval', 'approved_idea', 'script_pending', 'script_approved', 'scripting', 'shooting_pending', 'shooting_done', 'editing_done', 'published'].includes(i.status)); const filtered = contentFilter === 'all' || contentFilter === 'archived' ? base : contentFilter === 'pending' ? base.filter((i) => ['idea_pending', 'idea_needs_revision'].includes(i.status)) : base.filter((i) => ['scripting', 'approved_idea'].includes(i.status)); return [...filtered].sort((a, b) => (itemTime(b.approvedAt) || itemTime(b.createdAt)) - (itemTime(a.approvedAt) || itemTime(a.createdAt))) }, [items, view, contentFilter])
-  const createIdea = async (data: Omit<Item, 'id' | 'status'>) => { setSaving(true); const nextStatus = view === 'Kho Lưu Trữ' ? 'archived' : 'idea_pending'; const optimistic = { ...data, id: `local-${Date.now()}`, status: nextStatus as Status }; setItems((all) => [optimistic, ...all]); setShowForm(false); try { const ref = await addDoc(collection(db, 'contentItems'), { ...data, status: nextStatus, ownerId: user.uid, createdAt: serverTimestamp() }); setItems((all) => all.map((x) => x.id === optimistic.id ? { ...x, id: ref.id } : x)); await notifyRole('lead', { title: 'Ý tưởng mới cần duyệt', message: `Content ${user.displayName || user.email || 'phụ trách'} vừa gửi bài '${data.title}' để duyệt.`, type: 'status_change', linkId: ref.id, targetView: 'Duyệt content' }, user.uid) } catch { setItems((all) => all.filter((x) => x.id !== optimistic.id)) } finally { setSaving(false) } }
-  const updateItem = async (item: Item, patch: Partial<Item>) => { const editingScript = Boolean(patch.shots || patch.location || patch.outfit || patch.props); const revisingIdea = item.status === 'idea_needs_revision' && Boolean(patch.title || patch.description || patch.reference || patch.contentType || patch.goal || patch.platforms); if (editingScript && !['approved_idea'].includes(item.status)) return; const nextPatch = revisingIdea ? { ...patch, status: 'idea_pending' as Status } : item.status === 'approved_idea' && editingScript ? { ...patch, status: 'script_pending_creator' as Status } : patch; setItems((all) => all.map((x) => x.id === item.id ? { ...x, ...nextPatch } : x)); setSelected(null); if (!item.id.startsWith('local-')) await setDoc(doc(db, 'contentItems', item.id), nextPatch, { merge: true }); if (nextPatch.status === 'pending_approval') await notifyRole('lead', { title: 'Content đã chỉnh sửa và gửi duyệt lại', message: `Content ${user.displayName || user.email || 'phụ trách'} đã cập nhật và gửi duyệt lại bài '${item.title}'.`, type: 'status_change', linkId: item.id, targetView: 'Duyệt content' }, user.uid); if (nextPatch.status === 'script_pending_creator') { await notifyRole('creator', { title: 'Kịch bản mới chờ duyệt', message: `Content vừa gửi kịch bản '${item.title}' chờ bạn duyệt đi quay.`, type: 'status_change', linkId: item.id, targetView: 'Duyệt kịch bản' }, user.uid); setToast('Đã gửi kịch bản cho Creator kiểm duyệt!'); window.setTimeout(() => setToast(''), 3000) } }
-  const removeItem = async (item: Item) => { setItems((all) => all.filter((x) => x.id !== item.id)); if (!item.id.startsWith('demo-') && !item.id.startsWith('local-')) await deleteDoc(doc(db, 'contentItems', item.id)) }
-  const statCards = [{ key: 'all' as const, label: 'Tổng ý tưởng', value: contentStats.all }, { key: 'pending' as const, label: 'Chờ duyệt', value: contentStats.pending }, { key: 'scripting' as const, label: 'Chờ lên kịch bản', value: contentStats.scripting }, { key: 'archived' as const, label: 'Kho lưu trữ', value: contentStats.archived }]
-  const formatDate = (value: unknown) => { const timestamp = itemTime(value); return timestamp ? new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(timestamp) : 'Chưa cập nhật' }
-  return <><div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">{statCards.map((stat) => <button key={stat.key} type="button" onClick={() => setContentFilter(stat.key)} className={`rounded-xl border border-stone-200/80 bg-white p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md ${contentFilter === stat.key ? 'border-orange-400 bg-orange-50' : 'border-border bg-card hover:border-orange-300'}`}><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{stat.label}</p><p className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">{stat.value}</p><p className="mt-1 text-[10px] text-orange-600">Bấm để lọc danh sách</p></button>)}</div><div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-widest text-orange-500">Content workflow</p><h1 className="mt-1 text-2xl font-semibold">{view}</h1><p className="mt-2 text-sm text-muted-foreground">Tạo ý tưởng, phát triển kịch bản và bàn giao cho Creator.</p></div>{view !== 'Viết kịch bản chi tiết' && <button onClick={() => setShowForm(true)} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground"><Plus className="size-4" />Tạo ý tưởng mới</button>}</div>{showForm && <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/45 p-4"><div className="w-full max-w-2xl"><IdeaForm contentTypes={settings.contentTypes} goals={settings.goals} platforms={settings.platforms} initial={ideaDraft} saving={saving} onCancel={() => { setShowForm(false); setIdeaDraft(undefined) }} onSubmit={createIdea} /></div></div>}{!showForm && <div className="grid gap-3">{visible.length ? visible.map((item) => <article key={item.id} className="rounded-xl border border-border bg-card p-4"><div className="flex items-start justify-between gap-3"><div><span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span><h2 className="mt-1 font-medium">{item.title}</h2><p className="mt-1 text-xs text-muted-foreground">{item.description || 'Chưa có mô tả.'}</p>{item.status === 'video_needs_revision' && item.feedback && <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900"><strong>Feedback từ Lead:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}{item.status === 'video_needs_revision' && <button type="button" onClick={() => setSelected(item)} className="mt-3 rounded-lg bg-orange-600 px-3 py-2 text-xs font-medium text-white">Sửa kịch bản & Gửi duyệt lại</button>}<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground"><span>Sản phẩm: {item.contentType || 'Chưa phân loại'}</span><span>Tạo: {formatDate(item.createdAt)}</span>{Boolean(item.approvedAt) && <span>Duyệt: {formatDate(item.approvedAt)}</span>}</div>{item.reference && <VideoPreview url={item.reference} kind="ref" title={item.title} />}</div><button onClick={() => setSelected(item)} className="rounded-lg border border-border px-3 py-2 text-xs">Mở chi tiết</button></div><div className="mt-4 flex flex-wrap gap-2">{item.contentType && <span className="rounded-full bg-accent px-2 py-1 text-[10px]">{item.contentType}</span>}{item.platforms?.map((p) => <span key={p} className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground">{p}</span>)}</div></article>) : <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Chưa có nội dung ở trạng thái này.</div>}</div>}{selected && (selected.status === 'needs_revision' ? <IdeaRevisionEditor item={selected} onClose={() => setSelected(null)} onSave={(patch) => updateItem(selected, patch)} /> : <ScriptEditor item={selected} onClose={() => setSelected(null)} onSave={(patch) => updateItem(selected, patch)} onDelete={() => removeItem(selected)} />)}</>
+function ContentWorkspace({
+  user,
+  view,
+  canManageAll = false,
+}: {
+  user: User;
+  view: string;
+  canManageAll?: boolean;
+}) {
+  const [items, setItems] = useState<Item[]>(demoItems);
+  const [selected, setSelected] = useState<Item | null>(null);
+  const [toast, setToast] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [settings, setSettings] = useState({
+    platforms: platformOptions,
+    contentTypes,
+    goals: ["Tăng tương tác", "Chuyển đổi", "Branding"],
+  });
+  const [saving, setSaving] = useState(false);
+  const [ideaDraft, setIdeaDraft] = useState<{
+    title?: string;
+    description?: string;
+  }>();
+  const [contentFilter, setContentFilter] = useState<
+    "all" | "pending" | "scripting" | "archived"
+  >("all");
+  useEffect(() => {
+    const source = canManageAll
+      ? collection(db, "contentItems")
+      : query(collection(db, "contentItems"), where("ownerId", "==", user.uid));
+    return onSnapshot(
+      source,
+      (snap) => {
+        const remote = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as Item,
+        );
+        setItems(remote);
+      },
+      () => undefined,
+    );
+  }, [user.uid, canManageAll]);
+  useEffect(
+    () =>
+      onSnapshot(
+        doc(db, "app_settings", "workflow"),
+        (snap) => {
+          if (snap.exists())
+            setSettings((old) => ({
+              ...old,
+              ...(snap.data() as Partial<typeof old>),
+            }));
+        },
+        () => undefined,
+      ),
+    [],
+  );
+  const itemTime = (value: unknown) => {
+    if (
+      value &&
+      typeof value === "object" &&
+      "toMillis" in value &&
+      typeof value.toMillis === "function"
+    )
+      return value.toMillis();
+    if (typeof value === "string" || typeof value === "number")
+      return new Date(value).getTime() || 0;
+    return 0;
+  };
+  const contentStats = useMemo(
+    () => ({
+      all: items.filter((i) => i.status !== "rejected").length,
+      pending: items.filter((i) =>
+        ["idea_pending", "idea_needs_revision"].includes(i.status),
+      ).length,
+      scripting: items.filter((i) =>
+        ["scripting", "approved_idea"].includes(i.status),
+      ).length,
+      archived: items.filter((i) => i.status === "archived").length,
+    }),
+    [items],
+  );
+  const visible = useMemo(() => {
+    const isArchiveView =
+      view === "Kho Lưu Trữ" || contentFilter === "archived";
+    const base = isArchiveView
+      ? items.filter((i) => i.status === "archived")
+      : items.filter((i) =>
+          [
+            "idea_pending",
+            "idea_needs_revision",
+            "pending_approval",
+            "approved_idea",
+            "script_pending",
+            "script_approved",
+            "scripting",
+            "shooting_pending",
+            "shooting_done",
+            "editing_done",
+            "published",
+          ].includes(i.status),
+        );
+    const filtered =
+      contentFilter === "all" || contentFilter === "archived"
+        ? base
+        : contentFilter === "pending"
+          ? base.filter((i) =>
+              ["idea_pending", "idea_needs_revision"].includes(i.status),
+            )
+          : base.filter((i) =>
+              ["scripting", "approved_idea"].includes(i.status),
+            );
+    return [...filtered].sort(
+      (a, b) =>
+        (itemTime(b.approvedAt) || itemTime(b.createdAt)) -
+        (itemTime(a.approvedAt) || itemTime(a.createdAt)),
+    );
+  }, [items, view, contentFilter]);
+  const createIdea = async (data: Omit<Item, "id" | "status">) => {
+    setSaving(true);
+    const nextStatus = view === "Kho Lưu Trữ" ? "archived" : "idea_pending";
+    const optimistic = {
+      ...data,
+      id: `local-${Date.now()}`,
+      status: nextStatus as Status,
+    };
+    setItems((all) => [optimistic, ...all]);
+    setShowForm(false);
+    try {
+      const ref = await addDoc(collection(db, "contentItems"), {
+        ...data,
+        status: nextStatus,
+        ownerId: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      setItems((all) =>
+        all.map((x) => (x.id === optimistic.id ? { ...x, id: ref.id } : x)),
+      );
+      await notifyRole(
+        "lead",
+        {
+          title: "Ý tưởng mới cần duyệt",
+          message: `Content ${user.displayName || user.email || "phụ trách"} vừa gửi bài '${data.title}' để duyệt.`,
+          type: "status_change",
+          linkId: ref.id,
+          targetView: "Duyệt content",
+        },
+        user.uid,
+      );
+    } catch {
+      setItems((all) => all.filter((x) => x.id !== optimistic.id));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const updateItem = async (item: Item, patch: Partial<Item>) => {
+    const editingScript = Boolean(
+      patch.shots || patch.location || patch.outfit || patch.props,
+    );
+    const revisingIdea =
+      ["idea_pending", "idea_needs_revision"].includes(item.status) &&
+      Boolean(
+        patch.title ||
+        patch.description ||
+        patch.reference ||
+        patch.contentType ||
+        patch.goal ||
+        patch.platforms,
+      );
+    if (editingScript && !["approved_idea"].includes(item.status)) return;
+    const nextPatch = revisingIdea
+      ? { ...patch, status: "idea_pending" as Status }
+      : item.status === "approved_idea" && editingScript
+        ? { ...patch, status: "script_pending_creator" as Status }
+        : patch;
+    setItems((all) =>
+      all.map((x) => (x.id === item.id ? { ...x, ...nextPatch } : x)),
+    );
+    setSelected(null);
+    if (!item.id.startsWith("local-"))
+      await setDoc(doc(db, "contentItems", item.id), nextPatch, {
+        merge: true,
+      });
+    if (nextPatch.status === "pending_approval")
+      await notifyRole(
+        "lead",
+        {
+          title: "Content đã chỉnh sửa và gửi duyệt lại",
+          message: `Content ${user.displayName || user.email || "phụ trách"} đã cập nhật và gửi duyệt lại bài '${item.title}'.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Duyệt content",
+        },
+        user.uid,
+      );
+    if (nextPatch.status === "script_pending_creator") {
+      await notifyRole(
+        "creator",
+        {
+          title: "Kịch bản mới chờ duyệt",
+          message: `Content vừa gửi kịch bản '${item.title}' chờ bạn duyệt đi quay.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Duyệt kịch bản",
+        },
+        user.uid,
+      );
+      setToast("Đã gửi kịch bản cho Creator kiểm duyệt!");
+      window.setTimeout(() => setToast(""), 3000);
+    }
+  };
+  const removeItem = async (item: Item) => {
+    setItems((all) => all.filter((x) => x.id !== item.id));
+    if (!item.id.startsWith("demo-") && !item.id.startsWith("local-"))
+      await deleteDoc(doc(db, "contentItems", item.id));
+  };
+  const statCards = [
+    { key: "all" as const, label: "Tổng ý tưởng", value: contentStats.all },
+    {
+      key: "pending" as const,
+      label: "Chờ duyệt",
+      value: contentStats.pending,
+    },
+    {
+      key: "scripting" as const,
+      label: "Chờ lên kịch bản",
+      value: contentStats.scripting,
+    },
+    {
+      key: "archived" as const,
+      label: "Kho lưu trữ",
+      value: contentStats.archived,
+    },
+  ];
+  const formatDate = (value: unknown) => {
+    const timestamp = itemTime(value);
+    return timestamp
+      ? new Intl.DateTimeFormat("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        }).format(timestamp)
+      : "Chưa cập nhật";
+  };
+  return (
+    <>
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {statCards.map((stat) => (
+          <button
+            key={stat.key}
+            type="button"
+            onClick={() => setContentFilter(stat.key)}
+            className={`rounded-xl border border-stone-200/80 bg-white p-3 text-left shadow-sm transition-all duration-200 hover:shadow-md ${contentFilter === stat.key ? "border-orange-400 bg-orange-50" : "border-border bg-card hover:border-orange-300"}`}
+          >
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              {stat.label}
+            </p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-zinc-900">
+              {stat.value}
+            </p>
+            <p className="mt-1 text-[10px] text-orange-600">
+              Bấm để lọc danh sách
+            </p>
+          </button>
+        ))}
+      </div>
+      <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-orange-500">
+            Content workflow
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tạo ý tưởng, phát triển kịch bản và bàn giao cho Creator.
+          </p>
+        </div>
+        {view !== "Viết kịch bản chi tiết" && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground"
+          >
+            <Plus className="size-4" />
+            Tạo ý tưởng mới
+          </button>
+        )}
+      </div>
+      {showForm && (
+        <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-black/45 p-4">
+          <div className="w-full max-w-2xl">
+            <IdeaForm
+              contentTypes={settings.contentTypes}
+              goals={settings.goals}
+              platforms={settings.platforms}
+              initial={ideaDraft}
+              saving={saving}
+              onCancel={() => {
+                setShowForm(false);
+                setIdeaDraft(undefined);
+              }}
+              onSubmit={createIdea}
+            />
+          </div>
+        </div>
+      )}
+      {!showForm && (
+        <div className="grid gap-3">
+          {visible.length ? (
+            visible.map((item) => (
+              <article
+                key={item.id}
+                className="rounded-xl border border-border bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-orange-500">
+                      {statusLabels[item.status]}
+                    </span>
+                    <h2 className="mt-1 font-medium">{item.title}</h2>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.description || "Chưa có mô tả."}
+                    </p>
+                    {item.status === "video_needs_revision" &&
+                      item.feedback && (
+                        <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
+                          <strong>Feedback từ Lead:</strong>
+                          <p className="mt-1 whitespace-pre-wrap">
+                            {item.feedback}
+                          </p>
+                        </div>
+                      )}
+                    {item.status === "video_needs_revision" && (
+                      <button
+                        type="button"
+                        onClick={() => setSelected(item)}
+                        className="mt-3 rounded-lg bg-orange-600 px-3 py-2 text-xs font-medium text-white"
+                      >
+                        Sửa kịch bản & Gửi duyệt lại
+                      </button>
+                    )}
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                      <span>
+                        Sản phẩm: {item.contentType || "Chưa phân loại"}
+                      </span>
+                      <span>Tạo: {formatDate(item.createdAt)}</span>
+                      {Boolean(item.approvedAt) && (
+                        <span>Duyệt: {formatDate(item.approvedAt)}</span>
+                      )}
+                    </div>
+                    {item.reference && (
+                      <VideoPreview
+                        url={item.reference}
+                        kind="ref"
+                        title={item.title}
+                      />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelected(item)}
+                    className="rounded-lg border border-border px-3 py-2 text-xs"
+                  >
+                    Mở chi tiết
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {item.contentType && (
+                    <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
+                      {item.contentType}
+                    </span>
+                  )}
+                  {item.platforms?.map((p) => (
+                    <span
+                      key={p}
+                      className="rounded-full border border-border px-2 py-1 text-[10px] text-muted-foreground"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+              Chưa có nội dung ở trạng thái này.
+            </div>
+          )}
+        </div>
+      )}
+{selected &&
+          (["idea_pending", "idea_needs_revision"].includes(selected.status) ? (
+            <IdeaRevisionEditor
+              item={selected}
+              onClose={() => setSelected(null)}
+              onSave={(patch) => updateItem(selected, patch)}
+            />
+          ) : (
+            <ScriptEditor
+              item={selected}
+              onClose={() => setSelected(null)}
+              onSave={(patch) => updateItem(selected, patch)}
+              onDelete={() => removeItem(selected)}
+            />
+          ))}
+    </>
+  );
 }
 
-type VideoKind = 'ref' | 'source' | 'final' | 'published'
+type VideoKind = "ref" | "source" | "final" | "published";
 const videoKinds: Record<VideoKind, { icon: string; label: string }> = {
-  ref: { icon: '📌', label: 'VIDEO THAM KHẢO (REF)' },
-  source: { icon: '🎬', label: 'VIDEO SOURCE DỰNG (FILE GỐC)' },
-  final: { icon: '✂️', label: 'VIDEO BẢN DỰNG HOÀN CHỈNH' },
-  published: { icon: '🚀', label: 'VIDEO BÀI ĐĂNG THỰC TẾ' },
-}
-const isVideoUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim())
+  ref: { icon: "📌", label: "VIDEO THAM KHẢO (REF)" },
+  source: { icon: "🎬", label: "VIDEO SOURCE DỰNG (FILE GỐC)" },
+  final: { icon: "✂️", label: "VIDEO BẢN DỰNG HOÀN CHỈNH" },
+  published: { icon: "🚀", label: "VIDEO BÀI ĐĂNG THỰC TẾ" },
+};
+const isVideoUrl = (value?: string) =>
+  !!value && /^https?:\/\//i.test(value.trim());
 
 function primaryVideo(item: Item): { url?: string; kind: VideoKind } {
-  if (isVideoUrl(item.publishedLink)) return { url: item.publishedLink, kind: 'published' }
-  if (isVideoUrl(item.finalVideoLink)) return { url: item.finalVideoLink, kind: 'final' }
-  if (isVideoUrl(item.sourceLink)) return { url: item.sourceLink, kind: 'source' }
-  return { url: item.reference, kind: 'ref' }
+  if (isVideoUrl(item.publishedLink))
+    return { url: item.publishedLink, kind: "published" };
+  if (isVideoUrl(item.finalVideoLink))
+    return { url: item.finalVideoLink, kind: "final" };
+  if (isVideoUrl(item.sourceLink))
+    return { url: item.sourceLink, kind: "source" };
+  return { url: item.reference, kind: "ref" };
 }
 
 function VideoSet({ item }: { item: Item }) {
-  const entries: [string | undefined, VideoKind][] = [[item.reference, 'ref'], [item.sourceLink, 'source'], [item.finalVideoLink, 'final'], [item.publishedLink, 'published']]
-  return <>{entries.map(([url, kind]) => <VideoPreview key={kind} url={url} kind={kind} title={item.title} />)}</>
+  const entries: [string | undefined, VideoKind][] = [
+    [item.reference, "ref"],
+    [item.sourceLink, "source"],
+    [item.finalVideoLink, "final"],
+    [item.publishedLink, "published"],
+  ];
+  return (
+    <>
+      {entries.map(([url, kind]) => (
+        <VideoPreview key={kind} url={url} kind={kind} title={item.title} />
+      ))}
+    </>
+  );
 }
 
-function VideoPreview({ url, kind = 'ref', title }: { url?: string; kind?: VideoKind; title?: string }) {
-  if (!isVideoUrl(url)) return null
-  const value = url!.trim()
-  const meta = videoKinds[kind]
-  const label = title ? `${meta.label} – ${title}` : meta.label
-  const drive = value.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([\w-]+)/)?.[1]
-  const youtube = value.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([\w-]+)/)?.[1]
-  const tiktokId = value.match(/video\/(\d+)/)?.[1] || value.match(/\/([0-9]{8,})(?:\?|$)/)?.[1]
-  const isTikTok = /tiktok\.com/i.test(value)
-  const isDirect = /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(value)
-  const embed = drive ? `https://drive.google.com/file/d/${drive}/preview` : youtube ? `https://www.youtube.com/embed/${youtube}` : isTikTok && tiktokId ? `https://www.tiktok.com/player/v1/${tiktokId}` : value
-  const player = <div className="mx-auto aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-xl bg-black shadow-inner md:max-w-[380px]">{isDirect ? <video controls playsInline className="size-full object-cover" src={value} /> : <iframe title={label} src={embed} className="size-full object-cover" allow="autoplay; encrypted-media; picture-in-picture" />}</div>
-  const badge = <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-orange-700"><span aria-hidden="true">{meta.icon}</span><span className="shrink-0">{meta.label}</span></span>
-  return <div className="mt-3 overflow-hidden rounded-lg border border-orange-200/70"><div className="flex flex-wrap items-center justify-between gap-2 bg-orange-50/50 px-2.5 py-2 text-xs"><div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{badge}{title && <span className="min-w-0 truncate font-medium text-foreground" title={title}>{title}</span>}</div><div className="flex shrink-0 gap-2"><a href={value} target="_blank" rel="noreferrer" className="rounded-md border border-border bg-card px-2 py-1">Mở link gốc</a></div></div>{player}</div>
+function VideoPreview({
+  url,
+  kind = "ref",
+  title,
+}: {
+  url?: string;
+  kind?: VideoKind;
+  title?: string;
+}) {
+  if (!isVideoUrl(url)) return null;
+  const value = url!.trim();
+  const meta = videoKinds[kind];
+  const label = title ? `${meta.label} – ${title}` : meta.label;
+  const drive = value.match(
+    /drive\.google\.com\/(?:file\/d\/|open\?id=)([\w-]+)/,
+  )?.[1];
+  const youtube = value.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([\w-]+)/,
+  )?.[1];
+  const tiktokId =
+    value.match(/video\/(\d+)/)?.[1] ||
+    value.match(/\/([0-9]{8,})(?:\?|$)/)?.[1];
+  const isTikTok = /tiktok\.com/i.test(value);
+  const isDirect = /\.(mp4|webm|ogg)(?:[?#].*)?$/i.test(value);
+  const embed = drive
+    ? `https://drive.google.com/file/d/${drive}/preview`
+    : youtube
+      ? `https://www.youtube.com/embed/${youtube}`
+      : isTikTok && tiktokId
+        ? `https://www.tiktok.com/player/v1/${tiktokId}`
+        : value;
+  const player = (
+    <div className="mx-auto aspect-[9/16] w-full max-w-[340px] overflow-hidden rounded-xl bg-black shadow-inner md:max-w-[380px]">
+      {isDirect ? (
+        <video
+          controls
+          playsInline
+          className="size-full object-cover"
+          src={value}
+        />
+      ) : (
+        <iframe
+          title={label}
+          src={embed}
+          className="size-full object-cover"
+          allow="autoplay; encrypted-media; picture-in-picture"
+        />
+      )}
+    </div>
+  );
+  const badge = (
+    <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-orange-700">
+      <span aria-hidden="true">{meta.icon}</span>
+      <span className="shrink-0">{meta.label}</span>
+    </span>
+  );
+  return (
+    <div className="mt-3 overflow-hidden rounded-lg border border-orange-200/70">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-orange-50/50 px-2.5 py-2 text-xs">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          {badge}
+          {title && (
+            <span
+              className="min-w-0 truncate font-medium text-foreground"
+              title={title}
+            >
+              {title}
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-md border border-border bg-card px-2 py-1"
+          >
+            Mở link gốc
+          </a>
+        </div>
+      </div>
+      {player}
+    </div>
+  );
 }
 
-function CreativeAssistant({ role = 'content', onCreateIdea, onAction }: { role?: UserRole; onCreateIdea?: (draft: { title: string; description: string }) => void; onAction?: (text: string) => void }) { const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]); const [optimizedPrompt, setOptimizedPrompt] = useState(''); const [copied, setCopied] = useState(false); const roleConfig = { content: { title: 'AI Sáng Tạo Content & Kịch Bản', quick: ['Ý tưởng Fitcheck mới', 'Viết Shotlist kịch bản', 'Viết Hook câu view', 'Gợi ý Outfit phối kèm'], action: 'Tạo thành Ý tưởng mới' }, creator: { title: 'AI Trợ Lý Quay & Dựng Video', quick: ['Setup góc quay & ánh sáng', 'Ý tưởng hiệu ứng chuyển cảnh', 'Viết Caption & Hashtag', 'Gợi ý phong cách nhạc nền'], action: 'Chép vào Ghi chú / Caption' }, lead: { title: 'AI Cố Vấn Chiến Lược & Quản Lý', quick: ['Phân tích hiệu suất tuần', 'Viết nhận xét yêu cầu sửa bài', 'Đề xuất chiến lược tháng tới', 'Đánh giá KPI team'], action: 'Dán vào Phản hồi Sửa bài' } }[role]; const [input, setInput] = useState(''); const [loading, setLoading] = useState(false); const ask = async (prompt: string) => { if (!prompt.trim() || loading) return; const smartPrompt = `Tôi là Content/Creator của brand thời trang nam HAPPYORSAD (Chuyên quần âu cạp chun/sidetab/xếp li, sơ mi chống nhăn, polo). Hãy viết kịch bản chi tiết gồm Shotlist (Góc quay | Hành động | Voice/Text) và Hook 3s thu hút cho yêu cầu sau: ${prompt.trim()}`; setOptimizedPrompt(smartPrompt); setInput(''); setLoading(true); const next = [...messages, { role: 'user' as const, text: prompt }]; setMessages(next); try { setMessages((all) => [...all, { role: 'assistant', text: 'Smart Prompt đã được tối ưu cho HAPPYORSAD. Bạn có thể sao chép prompt hoặc mở Gemini Cá nhân để sử dụng.' }]) } catch (error) { setMessages((all) => [...all, { role: 'assistant', text: `Lỗi Gemini API: ${error instanceof Error ? error.message : 'Không thể kết nối server.'}` }]) } finally { setLoading(false) } }; const quick = roleConfig.quick; return <section className="mb-6 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900 dark:bg-orange-950/20 sm:p-5"><div className="flex items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-orange-500 text-white">✦</span><div><h2 className="font-semibold">{roleConfig.title}</h2><p className="mt-1 text-xs text-muted-foreground">Brainstorm nhanh cùng AI, sau đó chuyển thẳng thành ý tưởng mới.</p></div></div><div className="mt-4 flex flex-wrap gap-2">{quick.map((item) => <button key={item} onClick={() => ask(item)} className="rounded-full border border-orange-200 bg-background px-3 py-2 text-xs hover:border-orange-400">{item}</button>)}</div>{optimizedPrompt && <div className="mt-4 rounded-xl border border-orange-200 bg-card p-3"><div className="flex items-center justify-between gap-2"><p className="text-xs font-semibold text-orange-700">Smart Prompt đã tối ưu (HAPPYORSAD Content)</p><div className="flex gap-2"><button type="button" onClick={() => { void navigator.clipboard?.writeText(optimizedPrompt); setCopied(true); window.setTimeout(() => setCopied(false), 1800) }} className="rounded-lg border border-border px-2 py-1 text-[10px]">{copied ? 'Đã sao chép prompt!' : 'Sao chép Prompt'}</button><button type="button" onClick={() => window.open('https://gemini.google.com', '_blank', 'noopener,noreferrer')} className="rounded-lg bg-primary px-2 py-1 text-[10px] text-primary-foreground">Mở trên Gemini Cá nhân</button></div></div><p className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-accent p-2 text-[11px] text-muted-foreground">{optimizedPrompt}</p></div>}{messages.length > 0 && <div className="mt-4 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-background/70 p-3">{messages.map((message, index) => <div key={`${message.role}-${index}`} className={message.role === 'assistant' ? 'rounded-lg border border-border bg-card p-3 text-sm' : 'ml-6 rounded-lg bg-orange-500/10 p-3 text-sm'}><p className="whitespace-pre-wrap">{message.text}</p>{message.role === 'assistant' && <button onClick={() => role === 'content' ? onCreateIdea?.({ title: message.text.split('\n')[0].slice(0, 80) || 'Ý tưởng mới từ AI', description: message.text }) : onAction?.(message.text)} className="mt-3 rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">{roleConfig.action}</button>}</div>)}</div>}<form onSubmit={(event) => { event.preventDefault(); ask(input) }} className="mt-4 flex gap-2"><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="Hỏi AI về hook, trend, insight..." className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm" /><button disabled={loading} className="rounded-lg bg-primary px-4 text-xs text-primary-foreground">{loading ? 'Đang nghĩ...' : 'Gửi'}</button></form></section> }
-
-function IdeaForm({ onSubmit, onCancel, saving, initial, contentTypes: availableTypes, goals: availableGoals, platforms: availablePlatforms }: { onSubmit: (data: any) => void; onCancel: () => void; saving: boolean; initial?: { title?: string; description?: string }; contentTypes: string[]; goals: string[]; platforms: string[] }) { const [title, setTitle] = useState(initial?.title || ''); const [description, setDescription] = useState(initial?.description || ''); const [reference, setReference] = useState(''); const [contentType, setContentType] = useState(availableTypes[0] || 'Khác'); const [goal, setGoal] = useState(availableGoals[0] || 'Tăng tương tác'); const [platforms, setPlatforms] = useState<string[]>(availablePlatforms[0] ? [availablePlatforms[0]] : []); const toggle = (p: string) => setPlatforms((all) => all.includes(p) ? all.filter((x) => x !== p) : [...all, p]); return <form onSubmit={(e) => { e.preventDefault(); onSubmit({ title, description, reference, contentType, goal, platforms }) }} className="mb-6 rounded-2xl border border-border bg-card p-4 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><h2 className="font-semibold">Ý tưởng mới</h2><p className="mt-1 text-xs text-muted-foreground">Điền thông tin để gửi Lead duyệt.</p></div><button type="button" onClick={onCancel} aria-label="Đóng"><X className="size-4" /></button></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-medium sm:col-span-2">Tiêu đề ý tưởng<input required value={title} onChange={(e) => setTitle(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" placeholder="Ví dụ: 5 outfit đi làm mùa hè" /></label><label className="text-xs font-medium sm:col-span-2">Ghi chú kịch bản<textarea required value={description} onChange={(e) => setDescription(e.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-border bg-background p-3 text-sm" placeholder="Mục tiêu, insight và ý tưởng chính..." /></label><label className="text-xs font-medium">Dạng Content<select value={contentType} onChange={(e) => setContentType(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">{contentTypes.map((x) => <option key={x}>{x}</option>)}</select></label><label className="text-xs font-medium">Mục tiêu<select value={goal} onChange={(e) => setGoal(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"><option>Tăng tương tác</option><option>Chuyển đổi bán hàng</option><option>Định hình thương hiệu</option></select></label><label className="text-xs font-medium sm:col-span-2">Nguồn tham khảo / Link REF<input value={reference} onChange={(e) => setReference(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" placeholder="https://..." /></label><fieldset className="sm:col-span-2"><legend className="text-xs font-medium">Nền tảng đăng</legend><div className="mt-2 grid grid-cols-2 gap-2">{platformOptions.map((p) => <label key={p} className="flex items-center gap-2 rounded-lg border border-border p-3 text-xs"><input type="checkbox" checked={platforms.includes(p)} onChange={() => toggle(p)} />{p}</label>)}</div></fieldset></div><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={onCancel} className="rounded-lg border border-border px-4 py-2.5 text-xs">Hủy</button><button disabled={saving || !platforms.length} className="rounded-lg bg-primary px-4 py-2.5 text-xs font-medium text-primary-foreground">{saving ? 'Đang lưu...' : 'Gửi duyệt'}</button></div></form> }
-
-function IdeaRevisionEditor({ item, onClose, onSave }: { item: Item; onClose: () => void; onSave: (patch: Partial<Item>) => void }) { const [title, setTitle] = useState(item.title); const [description, setDescription] = useState(item.description || ''); const [reference, setReference] = useState(item.reference || ''); const [contentType, setContentType] = useState(item.contentType || ''); const [goal, setGoal] = useState(item.goal || ''); const [platforms, setPlatforms] = useState((item.platforms || []).join(', ')); return <div className="fixed inset-0 z-30 grid place-items-end bg-black/40 sm:place-items-center sm:p-4"><form onSubmit={(event) => { event.preventDefault(); onSave({ title, description, reference, contentType, goal, platforms: platforms.split(',').map((value) => value.trim()).filter(Boolean) }) }} className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl"><div className="flex items-start justify-between"><div><p className="text-xs text-orange-600">Ý tưởng cần chỉnh sửa</p><h2 className="mt-1 text-lg font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-4" /></button></div>{item.feedback && <div className="mt-4 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900"><strong>Feedback từ Lead:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}<div className="mt-5 grid gap-4"><Field label="Tiêu đề ý tưởng" value={title} onChange={setTitle} placeholder="Tên ý tưởng" /><label className="text-xs font-medium">Mô tả / insight / hướng triển khai<textarea required value={description} onChange={(event) => setDescription(event.target.value)} className="mt-2 min-h-28 w-full rounded-lg border border-border bg-background p-3 text-sm" /></label><Field label="Loại sản phẩm / content" value={contentType} onChange={setContentType} placeholder="Quần âu / Sơ mi / Polo" /><Field label="Mục tiêu" value={goal} onChange={setGoal} placeholder="Tăng tương tác" /><Field label="Link video REF" value={reference} onChange={setReference} placeholder="https://..." /><Field label="Nền tảng" value={platforms} onChange={setPlatforms} placeholder="TikTok, Reels" /></div><div className="mt-6 flex justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-xs">Hủy</button><button type="submit" className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"><Send className="mr-1 inline size-3" />Gửi duyệt lại</button></div></form></div> }
-
-function ScriptEditor({ item, onClose, onSave, onDelete }: { item: Item; onClose: () => void; onSave: (patch: Partial<Item>) => void; onDelete: () => void }) { const [location, setLocation] = useState(item.location || ''); const [outfit, setOutfit] = useState(item.outfit || ''); const [props, setProps] = useState(item.props || ''); const [shots, setShots] = useState<Shot[]>(item.shots || [{ no: 1, shot: '', angle: '', voice: '', text: '' }]); const addShot = () => setShots((all) => [...all, { no: all.length + 1, shot: '', angle: '', voice: '', text: '' }]); const updateShot = (index: number, key: keyof Shot, value: string) => setShots((all) => all.map((s, i) => i === index ? { ...s, [key]: key === 'no' ? Number(value) : value } : s)); const suggest = () => setShots([{ no: 1, shot: 'Mở cảnh toàn thân với outfit hoàn chỉnh', angle: 'Wide shot ngang hông', voice: 'Hôm nay mặc gì để vừa thoải mái vừa nổi bật?', text: 'LOOK OF THE DAY' }, { no: 2, shot: 'Cận chất liệu và chi tiết phụ kiện', angle: 'Close-up chuyển động', voice: 'Điểm nhấn nằm ở chất liệu và phom dáng.', text: 'DETAILS MATTER' }, { no: 3, shot: 'Xoay người và kết bằng pose tự nhiên', angle: 'Medium shot tracking', voice: 'Lưu lại để thử outfit này nhé!', text: 'SAVE THIS LOOK' }]); return <div className="fixed inset-0 z-20 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><div className="mb-5 flex items-start justify-between"><div><p className="text-xs text-orange-500">{statusLabels[item.status]}</p><h2 className="mt-1 text-lg font-semibold">{item.title}</h2>{item.status === 'video_needs_revision' && item.feedback && <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900"><strong>Feedback từ Lead:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}</div><button onClick={onClose} aria-label="Đóng"><X className="size-4" /></button></div><div className="grid gap-4 sm:grid-cols-3"><Field label="Bối cảnh" value={location} onChange={setLocation} placeholder="Studio / đường ph��..." /><Field label="Trang phục" value={outfit} onChange={setOutfit} placeholder="Mô tả styling..." /><Field label="Đạo cụ" value={props} onChange={setProps} placeholder="Túi, kính, hoa..." /></div><div className="mt-6 flex items-center justify-between"><h3 className="font-medium">Shotlist chi tiết</h3><button onClick={suggest} className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700"><Sparkles className="size-4" />AI gợi ý kịch bản</button></div><div className="mt-3 flex flex-col gap-3">{shots.map((shot, i) => <div key={i} className="rounded-xl border border-border p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold">Shot {i + 1}</span><button onClick={() => setShots((all) => all.filter((_, n) => n !== i))} className="text-muted-foreground" aria-label="Xóa shot"><Trash2 className="size-4" /></button></div><div className="grid gap-2 sm:grid-cols-2">{(['shot', 'angle', 'voice', 'text'] as const).map((key) => <input key={key} value={shot[key]} onChange={(e) => updateShot(i, key, e.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-xs" placeholder={{ shot: 'Shot quay', angle: 'Góc quay', voice: 'Lời thoại', text: 'Chữ hiển thị' }[key]} />)}</div></div>)}</div><button onClick={addShot} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs"><Plus className="size-4" />Thêm dòng shotlist</button><div className="mt-6 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between"><button onClick={onDelete} className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-destructive"><Trash2 className="size-4" />Xóa nội dung</button><div className="flex gap-2"><button onClick={onClose} className="rounded-lg border border-border px-4 py-2.5 text-xs">Hủy</button><button type="button" onClick={() => onSave({ location, outfit, props, shots, status: item.status === 'approved_idea' ? 'script_pending_creator' : item.status })} className="rounded-lg bg-primary px-4 py-2.5 text-xs font-medium text-primary-foreground">{item.status === 'approved_idea' ? 'Gửi kịch bản' : 'Lưu thay đổi'}</button></div></div></section></div> }
-function Field({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; placeholder: string; type?: string }) { return <label className="text-xs font-medium">{label}<input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm" /></label> }
-function CreatorWorkspace({ user, view, onViewChange }: { user: User; view: string; onViewChange: (view: string) => void }) {
-  const [items, setItems] = useState<Item[]>(demoItems.filter((item) => ['script_pending_creator', 'script_approved', 'shooting_pending', 'shooting_done', 'editing_done', 'video_pending', 'video_needs_revision', 'ready_to_post', 'published'].includes(item.status)))
-const [selected, setSelected] = useState<Item | null>(null); const [timeRange, setTimeRange] = useState<'today' | 'week' | 'month' | '30days'>('30days'); const [creatorFilter, setCreatorFilter] = useState<'script' | 'shoot' | 'video' | 'revision' | 'ready' | 'published' | 'overdue' | 'all'>('all'); const [publishedRange, setPublishedRange] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days' | 'month'>('all')
-  useEffect(() => { const q = query(collection(db, 'contentItems')); return onSnapshot(q, (snap) => { const remote = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Item)); if (remote.length) setItems(remote.filter((item) => !['archived', 'rejected'].includes(item.status) && (item.ownerId === user.uid || ['script_pending_creator', 'script_approved', 'video_pending', 'video_needs_revision', 'ready_to_post', 'published'].includes(item.status)))) }, () => undefined) }, [])
-  const update = async (item: Item, patch: Partial<Item>) => { const isPublishing = patch.status === 'published'; const nextPatch = patch.status === 'published' ? { ...patch, status: 'published' as Status } : patch.status === 'video_pending' ? { ...patch, status: 'video_pending' as Status } : item.status === 'script_pending_creator' && patch.status === 'script_approved' ? patch : { ...patch, status: item.status }; setItems((all) => all.map((x) => x.id === item.id ? { ...x, ...nextPatch, status: nextPatch.status || x.status } : x)); if (nextPatch.status === 'published') onViewChange('Danh sách bài đăng'); setSelected(null); if (!item.id.startsWith('demo-')) await setDoc(doc(db, 'contentItems', item.id), { ...nextPatch, status: nextPatch.status || item.status }, { merge: true }); if (nextPatch.status === 'published') { await notifyRole('lead', { title: 'Creator vừa đăng bài', message: `Creator ${user.displayName || 'phụ trách'} vừa đăng bài '${item.title}' lên ${(nextPatch.platforms || item.platforms || []).join(', ') || 'kênh chính thức'}!`, type: 'status_change', linkId: item.id, targetView: 'Duyệt video', videoLink: nextPatch.finalVideoLink || item.finalVideoLink || item.publishedLink }, user.uid); await notifyRole('content', { title: 'Creator vừa đăng bài', message: `Creator ${user.displayName || 'phụ trách'} vừa đăng bài '${item.title}' lên ${(nextPatch.platforms || item.platforms || []).join(', ') || 'kênh chính thức'}!`, type: 'status_change', linkId: item.id, targetView: 'Tất cả Content / Viết Kịch Bản' }, user.uid) }; if (nextPatch.status === 'video_pending') await notifyRole('lead', { title: 'Video mới chờ duyệt', message: `🎬 Creator ${user.displayName || user.email || 'phụ trách'} vừa tải lên video cho bài '${item.title}', đang chờ bạn duyệt!`, type: 'status_change', linkId: item.id, targetView: 'Duyệt video', videoLink: nextPatch.finalVideoLink || item.finalVideoLink || item.publishedLink }, user.uid) }
-  const publishedItems = items.filter((item) => item.status === 'published').sort((a, b) => publishedTime(b.publishedAt) - publishedTime(a.publishedAt)); const filteredPublishedItems = publishedItems.filter((item) => { const timestamp = publishedTime(item.publishedAt); if (!timestamp || publishedRange === 'all') return publishedRange === 'all'; const now = new Date(); const date = new Date(timestamp); const start = new Date(now); start.setHours(0, 0, 0, 0); if (publishedRange === 'today') return date >= start; if (publishedRange === 'yesterday') { const yesterday = new Date(start); yesterday.setDate(yesterday.getDate() - 1); return date >= yesterday && date < start } if (publishedRange === '7days') { const sevenDays = new Date(start); sevenDays.setDate(sevenDays.getDate() - 7); return date >= sevenDays } if (publishedRange === '30days') { const thirtyDays = new Date(start); thirtyDays.setDate(thirtyDays.getDate() - 30); return date >= thirtyDays } return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() }); const allCreatorItems = items.filter((item) => ['script_pending_creator', 'script_approved', 'shooting_pending', 'shooting_done', 'editing_done', 'video_pending', 'needs_revision', 'ready_to_post'].includes(item.status)); const visible = creatorFilter === 'script' ? items.filter((item) => item.status === 'script_pending_creator') : creatorFilter === 'shoot' ? items.filter((item) => item.status === 'script_approved') : creatorFilter === 'video' ? items.filter((item) => item.status === 'video_pending') : creatorFilter === 'revision' ? items.filter((item) => item.status === 'video_needs_revision') : creatorFilter === 'ready' ? items.filter((item) => item.status === 'ready_to_post') : creatorFilter === 'published' ? filteredPublishedItems : creatorFilter === 'overdue' ? items.filter((item) => item.status !== 'published' && !!item.scheduledAt && new Date(item.scheduledAt).getTime() < Date.now()) : view === 'Cần Feedback / Sửa Video' ? items.filter((item) => item.status === 'video_needs_revision') : view === 'Danh sách bài đăng' ? filteredPublishedItems : allCreatorItems
-  return <><div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs uppercase tracking-widest text-orange-500">Creator workflow</p><h1 className="mt-1 text-2xl font-semibold">{view}</h1>{view === 'Danh sách bài đăng' && <label className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-zinc-700">Lọc theo ngày đăng<select value={publishedRange} onChange={(event) => setPublishedRange(event.target.value as typeof publishedRange)} className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs text-zinc-900 shadow-sm"><option value="all">Tất cả</option><option value="today">Hôm nay</option><option value="yesterday">Hôm qua</option><option value="7days">7 ngày trước</option><option value="30days">30 ngày trước</option><option value="month">Tháng này</option></select></label>}<p className="mt-2 text-sm text-muted-foreground">Tiếp nhận k���ch bản, tối ưu lịch quay và bàn giao bản dựng.</p></div><div className="flex items-center gap-2"><select aria-label="Bộ lọc thời gian" value={timeRange} onChange={(event) => setTimeRange(event.target.value as typeof timeRange)} className="rounded-lg border border-border bg-card px-2 py-2 text-xs"><option value="today">Hôm nay</option><option value="week">Tuần này</option><option value="month">Tháng này</option><option value="30days">30 ngày qua</option></select><div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">{visible.length} bài trong luồng</div></div></div><div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">{[['Kịch bản chờ duyệt', 'script', items.filter((i) => i.status === 'script_pending_creator'), FileText], ['Bài chờ quay / dựng', 'shoot', items.filter((i) => i.status === 'script_approved'), Film], ['Video chờ Lead duyệt', 'video', items.filter((i) => i.status === 'video_pending'), Send], ['Cần sửa theo Feedback', 'revision', items.filter((i) => i.status === 'needs_revision'), AlertTriangle], ['Video đã duyệt / sẵn sàng đăng', 'ready', items.filter((i) => i.status === 'ready_to_post'), Check], ['Bài đã đăng', 'published', items.filter((i) => i.status === 'published'), Check], ['Bài quá hạn / trễ deadline', 'overdue', items.filter((i) => i.status !== 'published' && !!i.scheduledAt && new Date(i.scheduledAt).getTime() < Date.now()), AlertTriangle]].map(([label, filter, list, Icon]: any) => <button key={filter} type="button" onClick={() => setCreatorFilter(filter)} className={`rounded-xl border bg-card p-3 text-left ${creatorFilter === filter ? 'border-orange-400 bg-orange-50' : 'border-border'}`}><Icon className="mb-2 size-4 text-orange-500" /><p className="text-xl font-semibold">{list.length}</p><p className="mt-1 text-xs leading-tight text-muted-foreground">{label}</p></button>)}</div>{view === 'Danh sách bài đăng' ? <div className="grid gap-3">{publishedItems.length ? publishedItems.map((item) => <article key={item.id} className="grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-[1.4fr_1fr_auto]"><div><VideoPreview url={item.finalVideoLink} kind="final" title={item.title} /><p className="mt-2 text-sm font-medium">{item.caption || item.title}</p></div><div className="flex flex-wrap content-start gap-2">{(item.platforms || []).map((platform) => <span key={platform} className="rounded-full bg-accent px-2 py-1 text-xs">{platform}</span>)}<p className="w-full text-xs text-muted-foreground">Đăng dự kiến: {item.scheduledAt ? new Date(item.scheduledAt).toLocaleString('vi-VN') : '—'}</p></div><div><a href={item.publishedLink || item.finalVideoLink || '#'} target="_blank" rel="noreferrer" className="inline-flex rounded-lg border border-border px-3 py-2 text-xs">Mở link gốc</a></div></article>) : <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Chưa có bài đã đăng.</div>}</div> : <div className="grid gap-3">{visible.length ? visible.map((item) => <CreatorCard key={item.id} item={item} onOpen={() => setSelected(item)} />) : <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Chưa có bài viết trong công đoạn này.</div>}</div>}{selected && <CreatorEditor item={selected} user={user} onClose={() => setSelected(null)} onSave={(patch) => update(selected, patch)} />}</>
+function CreativeAssistant({
+  role = "content",
+  onCreateIdea,
+  onAction,
+}: {
+  role?: UserRole;
+  onCreateIdea?: (draft: { title: string; description: string }) => void;
+  onAction?: (text: string) => void;
+}) {
+  const [messages, setMessages] = useState<
+    { role: "user" | "assistant"; text: string }[]
+  >([]);
+  const [optimizedPrompt, setOptimizedPrompt] = useState("");
+  const [copied, setCopied] = useState(false);
+  const roleConfig = {
+    content: {
+      title: "AI Sáng Tạo Content & Kịch Bản",
+      quick: [
+        "Ý tưởng Fitcheck mới",
+        "Viết Shotlist kịch bản",
+        "Viết Hook câu view",
+        "Gợi ý Outfit phối kèm",
+      ],
+      action: "Tạo thành Ý tưởng mới",
+    },
+    creator: {
+      title: "AI Trợ Lý Quay & Dựng Video",
+      quick: [
+        "Setup góc quay & ánh sáng",
+        "Ý tưởng hiệu ứng chuyển cảnh",
+        "Viết Caption & Hashtag",
+        "Gợi ý phong cách nhạc nền",
+      ],
+      action: "Chép vào Ghi chú / Caption",
+    },
+    lead: {
+      title: "AI Cố Vấn Chiến Lược & Quản Lý",
+      quick: [
+        "Phân tích hiệu suất tuần",
+        "Viết nhận xét yêu cầu sửa bài",
+        "Đề xuất chiến lược tháng tới",
+        "Đánh giá KPI team",
+      ],
+      action: "Dán vào Phản hồi Sửa bài",
+    },
+  }[role];
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const ask = async (prompt: string) => {
+    if (!prompt.trim() || loading) return;
+    const smartPrompt = `Tôi là Content/Creator của brand thời trang nam HAPPYORSAD (Chuyên quần âu cạp chun/sidetab/xếp li, sơ mi chống nhăn, polo). Hãy viết kịch bản chi tiết gồm Shotlist (Góc quay | Hành động | Voice/Text) và Hook 3s thu hút cho yêu cầu sau: ${prompt.trim()}`;
+    setOptimizedPrompt(smartPrompt);
+    setInput("");
+    setLoading(true);
+    const next = [...messages, { role: "user" as const, text: prompt }];
+    setMessages(next);
+    try {
+      setMessages((all) => [
+        ...all,
+        {
+          role: "assistant",
+          text: "Smart Prompt đã được tối ưu cho HAPPYORSAD. Bạn có thể sao chép prompt hoặc mở Gemini Cá nhân để sử dụng.",
+        },
+      ]);
+    } catch (error) {
+      setMessages((all) => [
+        ...all,
+        {
+          role: "assistant",
+          text: `Lỗi Gemini API: ${error instanceof Error ? error.message : "Không thể kết nối server."}`,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const quick = roleConfig.quick;
+  return (
+    <section className="mb-6 rounded-2xl border border-orange-200 bg-orange-50/60 p-4 dark:border-orange-900 dark:bg-orange-950/20 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-orange-500 text-white">
+          ✦
+        </span>
+        <div>
+          <h2 className="font-semibold">{roleConfig.title}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Brainstorm nhanh cùng AI, sau đó chuyển thẳng thành ý tưởng mới.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {quick.map((item) => (
+          <button
+            key={item}
+            onClick={() => ask(item)}
+            className="rounded-full border border-orange-200 bg-background px-3 py-2 text-xs hover:border-orange-400"
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+      {optimizedPrompt && (
+        <div className="mt-4 rounded-xl border border-orange-200 bg-card p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-orange-700">
+              Smart Prompt đã tối ưu (HAPPYORSAD Content)
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(optimizedPrompt);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 1800);
+                }}
+                className="rounded-lg border border-border px-2 py-1 text-[10px]"
+              >
+                {copied ? "Đã sao chép prompt!" : "Sao chép Prompt"}
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  window.open(
+                    "https://gemini.google.com",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+                className="rounded-lg bg-primary px-2 py-1 text-[10px] text-primary-foreground"
+              >
+                Mở trên Gemini Cá nhân
+              </button>
+            </div>
+          </div>
+          <p className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap rounded-lg bg-accent p-2 text-[11px] text-muted-foreground">
+            {optimizedPrompt}
+          </p>
+        </div>
+      )}
+      {messages.length > 0 && (
+        <div className="mt-4 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-background/70 p-3">
+          {messages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={
+                message.role === "assistant"
+                  ? "rounded-lg border border-border bg-card p-3 text-sm"
+                  : "ml-6 rounded-lg bg-orange-500/10 p-3 text-sm"
+              }
+            >
+              <p className="whitespace-pre-wrap">{message.text}</p>
+              {message.role === "assistant" && (
+                <button
+                  onClick={() =>
+                    role === "content"
+                      ? onCreateIdea?.({
+                          title:
+                            message.text.split("\n")[0].slice(0, 80) ||
+                            "Ý tưởng mới từ AI",
+                          description: message.text,
+                        })
+                      : onAction?.(message.text)
+                  }
+                  className="mt-3 rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                >
+                  {roleConfig.action}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          ask(input);
+        }}
+        className="mt-4 flex gap-2"
+      >
+        <input
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Hỏi AI về hook, trend, insight..."
+          className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
+        />
+        <button
+          disabled={loading}
+          className="rounded-lg bg-primary px-4 text-xs text-primary-foreground"
+        >
+          {loading ? "Đang nghĩ..." : "Gửi"}
+        </button>
+      </form>
+    </section>
+  );
 }
 
-function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) { const overdue = !!item.scheduledAt && new Date(item.scheduledAt).getTime() < Date.now() && item.status !== 'published'; return <article className={`rounded-xl border bg-card p-4 ${overdue ? 'border-destructive' : 'border-border'}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`text-[10px] uppercase tracking-wider ${item.status === 'video_needs_revision' ? 'text-destructive' : 'text-orange-500'}`}>{item.status === 'video_needs_revision' ? 'CẦN FEEDBACK / CẦN SỬA' : statusLabels[item.status]}</span>{item.status === 'video_needs_revision' && item.feedback && <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">Feedback mới</span>}{overdue && <span className="inline-flex items-center gap-1 text-[10px] font-medium text-destructive"><AlertTriangle className="size-3" />Quá deadline</span>}</div><h2 className="mt-1 font-medium">{item.title}</h2><p className="mt-1 text-xs text-muted-foreground">{item.location || 'Chưa có bối cảnh'} · {item.outfit || 'Chưa có outfit'}</p>{item.status === 'published' && <div className="mt-3 rounded-lg bg-stone-50 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">Caption</p><p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-zinc-800">{item.caption || 'Chưa có caption'}</p><div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-600"><span className="inline-flex items-center gap-1"><CalendarDays className="size-3" />{publishedLabel(item.publishedAt)}</span>{(item.platforms || []).map((platform) => <span key={platform} className={`rounded-full px-2 py-1 text-[10px] font-semibold ${platform.toLowerCase().includes('tiktok') ? 'bg-zinc-900 text-white' : platform.toLowerCase().includes('shopee') ? 'bg-orange-500 text-white' : 'bg-blue-600 text-white'}`}>{platform}</span>)}</div></div>}<VideoPreview {...primaryVideo(item)} title={item.title} /></div><button onClick={onOpen} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs">Mở bài</button></div>{item.scheduledAt && <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-3" />Đăng dự kiến: {new Date(item.scheduledAt).toLocaleString('vi-VN')}</p>}<div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full bg-accent px-2 py-1 text-[10px]">{item.shots?.length || 0} shots</span>{item.platforms?.map((p) => <span key={p} className="rounded-full border border-border px-2 py-1 text-[10px]">{p}</span>)}</div></article> }
-
-function CreatorEditor({ item, user, onClose, onSave }: { item: Item; user: User; onClose: () => void; onSave: (patch: Partial<Item>) => void }) { const [draft, setDraft] = useState(item); const [toast, setToast] = useState(''); const [toastError, setToastError] = useState(false); const [publishErrors, setPublishErrors] = useState({ scheduledAt: false, finalVideoLink: false }); const set = (key: keyof Item, value: string) => { setDraft((old) => ({ ...old, [key]: value })); if (key === 'scheduledAt' || key === 'finalVideoLink') setPublishErrors((old) => ({ ...old, [key]: false })) }; const showToast = (message: string, error = false) => { setToast(message); setToastError(error); window.setTimeout(() => { setToast(''); setToastError(false) }, 3000) }; const handleSaveDraft = () => { onSave({ ...draft, status: item.status }); showToast('Đã lưu thay đổi thông tin bài viết!') }; const handleSubmitForReview = () => { const errors = { scheduledAt: !draft.scheduledAt?.trim(), finalVideoLink: !draft.finalVideoLink?.trim() }; if (errors.scheduledAt || errors.finalVideoLink) { setPublishErrors(errors); showToast("Vui lòng nhập đầy đủ 'Thời gian dự kiến đăng bài' và 'Link video hoàn chỉnh' trước khi gửi duyệt!", true); return } onSave({ ...draft, status: 'video_pending' }); showToast('Đã gửi video cho Lead duyệt!'); onClose() }; const handlePublish = () => { const errors = { scheduledAt: !draft.scheduledAt?.trim(), finalVideoLink: !draft.finalVideoLink?.trim() }; if (errors.scheduledAt || errors.finalVideoLink) { setPublishErrors(errors); showToast("Vui lòng nhập đầy đủ 'Thời gian dự kiến đăng bài' và 'Link video hoàn chỉnh' trước khi bấm Đăng bài!", true); return } onSave({ ...draft, status: 'published', publishedAt: new Date() }); showToast('Đã chuyển bài viết sang trạng thái BÀI ĐÃ ĐĂNG thành công!'); onClose() }; const save = (patch: Partial<Item> = {}) => onSave({ ...draft, ...patch }); return <div className="fixed inset-0 z-20 grid place-items-end bg-black/40 sm:place-items-center sm:p-4"><section className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><div className="mb-5 flex items-start justify-between"><div><p className="text-xs text-orange-500">{statusLabels[item.status]}</p><h2 className="mt-1 text-lg font-semibold">{item.title}</h2>{item.status === 'video_needs_revision' && item.feedback && <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900"><strong>Feedback từ Lead:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}</div><button onClick={onClose} aria-label="Đóng"><X className="size-4" /></button></div><div className="grid gap-4 sm:grid-cols-2"><CreatorInput label="Bối cảnh" value={draft.location || ''} onChange={(v) => set('location', v)} /><CreatorInput label="Outfit" value={draft.outfit || ''} onChange={(v) => set('outfit', v)} /><CreatorInput label="Đạo cụ" value={draft.props || ''} onChange={(v) => set('props', v)} /><CreatorInput label="Thời gian dự kiến đăng bài" type="datetime-local" value={draft.scheduledAt || ''} onChange={(v) => set('scheduledAt', v)} error={publishErrors.scheduledAt} /><div>{draft.reference && <VideoPreview url={draft.reference} kind="ref" title={draft.title} />}<CreatorInput label="Link source Google Drive" value={draft.sourceLink || ''} onChange={(v) => set('sourceLink', v)} /><VideoPreview url={draft.sourceLink} kind="source" title={draft.title} /></div><div><CreatorInput label="Link video hoàn chỉnh" value={draft.finalVideoLink || ''} onChange={(v) => set('finalVideoLink', v)} error={publishErrors.finalVideoLink} /><VideoPreview url={draft.finalVideoLink} kind="final" title={draft.title} /></div><section className="sm:col-span-2 rounded-xl border border-border bg-muted/30 p-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">Shotlist chi tiết</h3>{draft.shotlistLink && <a href={draft.shotlistLink} target="_blank" rel="noreferrer" className="rounded-lg border border-border bg-background px-3 py-2 text-xs">Mở link shotlist</a>}</div>{draft.shots?.length ? <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead><tr className="border-b border-border text-muted-foreground"><th className="px-2 py-2">#</th><th className="px-2 py-2">Shot / Nội dung</th><th className="px-2 py-2">Góc máy</th><th className="px-2 py-2">Voice</th><th className="px-2 py-2">Text màn hình</th></tr></thead><tbody>{draft.shots.map((shot) => <tr key={shot.no} className="border-b border-border/60"><td className="px-2 py-2">{shot.no}</td><td className="px-2 py-2">{shot.shot || '—'}</td><td className="px-2 py-2">{shot.angle || '—'}</td><td className="px-2 py-2">{shot.voice || '—'}</td><td className="px-2 py-2">{shot.text || '—'}</td></tr>)}</tbody></table></div> : <p className="mt-2 text-xs text-muted-foreground">Content chưa nhập shotlist chi tiết.</p>}</section><fieldset className="sm:col-span-2"><legend className="text-xs font-medium">Nền tảng đăng bài</legend><div className="mt-2 flex flex-wrap gap-2">{['TikTok', 'Shopee Video', 'Instagram Reels', 'Facebook Reels', 'YouTube Shorts'].map((platform) => <label key={platform} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"><input type="checkbox" checked={(draft.platforms || []).includes(platform)} onChange={() => setDraft((old) => ({ ...old, platforms: (old.platforms || []).includes(platform) ? (old.platforms || []).filter((value) => value !== platform) : [...(old.platforms || []), platform] }))} />{platform}</label>)}</div></fieldset><label className="text-xs font-medium sm:col-span-2">Caption bài post<textarea value={draft.caption || ''} onChange={(e) => set('caption', e.target.value)} className="mt-2 min-h-20 w-full rounded-lg border border-border bg-background p-3 text-sm" placeholder="Tiêu đề và hashtag..." /></label><label className="text-xs font-medium sm:col-span-2">Ghi chú set quay / gửi Lead<textarea value={draft.shootNote || draft.leadNote || ''} onChange={(e) => { set('shootNote', e.target.value); set('leadNote', e.target.value) }} className="mt-2 min-h-20 w-full rounded-lg border border-border bg-background p-3 text-sm" placeholder="Ghi chú feedback, ánh sáng, bối cảnh..." /></label></div><div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4"><button type="button" onClick={handleSaveDraft} className="inline-flex h-10 items-center gap-2 rounded-lg border border-border px-3 text-xs"><Save className="size-4" />Lưu chỉnh sửa</button>{['script_approved', 'shooting_pending', 'shooting_done', 'editing_done', 'needs_revision'].includes(item.status) && <button type="button" onClick={handleSubmitForReview} aria-label="G���i video cho Lead duyệt" className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"><Send className="size-4" />Gửi duyệt video</button>}{item.status === 'script_pending_creator' && <button onClick={() => save({ status: 'script_approved' })} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"><Check className="size-4" />Duyệt kịch bản</button>}{item.status === 'shooting_pending' && <button onClick={() => save({ status: 'shooting_done' })} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"><Film className="size-4" />Đã quay xong</button>}{item.status === 'ready_to_post' && <button type="button" onClick={handlePublish} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"><Check className="size-4" />Đăng bài</button>}</div>{toast && <div role="status" className={`fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg ${toastError ? 'bg-red-600' : 'bg-emerald-600'}`}>{toast}</div>}<TaskChat item={item} user={user} role="creator" /></section></div> }
-
-function TaskChat({ item, user, role }: { item: Item; user: User; role: UserRole }) {
-  const [messages, setMessages] = useState<TaskMessage[]>([])
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  useEffect(() => { if (item.id.startsWith('demo-')) return; return onSnapshot(collection(db, 'contentItems', item.id, 'messages'), (snap) => setMessages(snap.docs.map((entry) => ({ id: entry.id, ...entry.data() } as TaskMessage)).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))), () => undefined) }, [item.id])
-  const send = async (event: FormEvent) => { event.preventDefault(); const value = text.trim(); if (!value || item.id.startsWith('demo-')) return; setSending(true); setText(''); try { await addDoc(collection(db, 'contentItems', item.id, 'messages'), { text: value, senderName: user.displayName || user.email || 'Thành viên', senderRole: role, senderId: user.uid, createdAt: serverTimestamp() }); await setDoc(doc(db, 'contentItems', item.id), { feedbackUnread: (item.feedbackUnread || 0) + 1, ...(role === 'lead' ? { feedback: value, leadNote: value } : {}) }, { merge: true }); await notifyRole(role === 'lead' ? 'content' : role === 'content' ? 'creator' : 'lead', { title: 'Tin nhắn mới trong Feedback & Trao đổi', message: `${user.displayName || user.email || 'Thành viên'} (${roleLabels[role]}): ${value.slice(0, 100)}`, type: 'chat', linkId: item.id, targetView: role === 'lead' ? 'Tất cả Content / Viết Kịch Bản' : role === 'content' ? 'Cần Feedback / Sửa Video' : 'Duyệt video' }, user.uid) } finally { setSending(false) } }
-  return <div className="mt-5 rounded-xl border border-border bg-background p-4"><div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-sm font-medium"><MessageCircle className="size-4 text-orange-500" />Feedback & Trao đổi</div>{messages.length > 0 && <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">{messages.length} tin nhắn</span>}</div><div className="max-h-48 space-y-2 overflow-y-auto">{messages.map((message) => <div key={message.id} className="rounded-lg border border-border bg-card p-2.5 text-xs"><div className="flex justify-between gap-2"><b>{message.senderName}</b><span className="text-muted-foreground">{roleLabels[message.senderRole]}</span></div><p className="mt-1 whitespace-pre-wrap">{message.text}</p></div>)}{!messages.length && <p className="text-xs text-muted-foreground">Chưa có trao đổi. Hãy để lại ghi chú cho team.</p>}</div><form onSubmit={send} className="mt-3 flex gap-2"><input value={text} onChange={(event) => setText(event.target.value)} aria-label="Gửi feedback" placeholder="Viết phản hồi hoặc d��n link..." className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-xs" /><button disabled={sending || item.id.startsWith('demo-')} aria-label="Gửi feedback" className="rounded-lg bg-primary px-3 text-primary-foreground"><Send className="size-4" /></button></form>{item.id.startsWith('demo-') && <p className="mt-2 text-[10px] text-muted-foreground">Trao đổi realtime khả dụng sau khi bài ��ư���c lưu vào Firestore.</p>}</div>
+function IdeaForm({
+  onSubmit,
+  onCancel,
+  saving,
+  initial,
+  contentTypes: availableTypes,
+  goals: availableGoals,
+  platforms: availablePlatforms,
+}: {
+  onSubmit: (data: any) => void;
+  onCancel: () => void;
+  saving: boolean;
+  initial?: { title?: string; description?: string };
+  contentTypes: string[];
+  goals: string[];
+  platforms: string[];
+}) {
+  const [title, setTitle] = useState(initial?.title || "");
+  const [description, setDescription] = useState(initial?.description || "");
+  const [reference, setReference] = useState("");
+  const [contentType, setContentType] = useState(availableTypes[0] || "Khác");
+  const [goal, setGoal] = useState(availableGoals[0] || "Tăng tương tác");
+  const [platforms, setPlatforms] = useState<string[]>(
+    availablePlatforms[0] ? [availablePlatforms[0]] : [],
+  );
+  const toggle = (p: string) =>
+    setPlatforms((all) =>
+      all.includes(p) ? all.filter((x) => x !== p) : [...all, p],
+    );
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit({
+          title,
+          description,
+          reference,
+          contentType,
+          goal,
+          platforms,
+        });
+      }}
+      className="mb-6 rounded-2xl border border-border bg-card p-4 sm:p-6"
+    >
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="font-semibold">Ý tưởng mới</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Điền thông tin để gửi Lead duyệt.
+          </p>
+        </div>
+        <button type="button" onClick={onCancel} aria-label="Đóng">
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-xs font-medium sm:col-span-2">
+          Tiêu đề ý tưởng
+          <input
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            placeholder="Ví dụ: 5 outfit đi làm mùa hè"
+          />
+        </label>
+        <label className="text-xs font-medium sm:col-span-2">
+          Ghi chú kịch bản
+          <textarea
+            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="mt-2 min-h-24 w-full rounded-lg border border-border bg-background p-3 text-sm"
+            placeholder="Mục tiêu, insight và ý tưởng chính..."
+          />
+        </label>
+        <label className="text-xs font-medium">
+          Dạng Content
+          <select
+            value={contentType}
+            onChange={(e) => setContentType(e.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            {contentTypes.map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-medium">
+          Mục tiêu
+          <select
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+          >
+            <option>Tăng tương tác</option>
+            <option>Chuyển đổi bán hàng</option>
+            <option>Định hình thương hiệu</option>
+          </select>
+        </label>
+        <label className="text-xs font-medium sm:col-span-2">
+          Nguồn tham khảo / Link REF
+          <input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            placeholder="https://..."
+          />
+        </label>
+        <fieldset className="sm:col-span-2">
+          <legend className="text-xs font-medium">Nền tảng đăng</legend>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {platformOptions.map((p) => (
+              <label
+                key={p}
+                className="flex items-center gap-2 rounded-lg border border-border p-3 text-xs"
+              >
+                <input
+                  type="checkbox"
+                  checked={platforms.includes(p)}
+                  onChange={() => toggle(p)}
+                />
+                {p}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-border px-4 py-2.5 text-xs"
+        >
+          Hủy
+        </button>
+        <button
+          disabled={saving || !platforms.length}
+          className="rounded-lg bg-primary px-4 py-2.5 text-xs font-medium text-primary-foreground"
+        >
+          {saving ? "Đang lưu..." : "Gửi duyệt"}
+        </button>
+      </div>
+    </form>
+  );
 }
 
-function CreatorInput({ label, value, onChange, type = 'text', error = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; error?: boolean }) { return <label className="text-xs font-medium">{label}<input type={type} value={value} onChange={(e) => onChange(e.target.value)} aria-invalid={error} className={`mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm ${error ? 'border-red-500 ring-1 ring-red-300' : 'border-border'}`} /></label> }
+function IdeaRevisionEditor({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: Item;
+  onClose: () => void;
+  onSave: (patch: Partial<Item>) => void;
+}) {
+  const [title, setTitle] = useState(item.title);
+  const [description, setDescription] = useState(item.description || "");
+  const [reference, setReference] = useState(item.reference || "");
+  const [contentType, setContentType] = useState(item.contentType || "");
+  const [goal, setGoal] = useState(item.goal || "");
+  const [platforms, setPlatforms] = useState((item.platforms || []).join(", "));
+  return (
+    <div className="fixed inset-0 z-30 grid place-items-end bg-black/40 sm:place-items-center sm:p-4">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave({
+            title,
+            description,
+            reference,
+            contentType,
+            goal,
+            platforms: platforms
+              .split(",")
+              .map((value) => value.trim())
+              .filter(Boolean),
+          });
+        }}
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs text-orange-600">Ý tưởng cần chỉnh sửa</p>
+            <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Đóng">
+            <X className="size-4" />
+          </button>
+        </div>
+        {item.feedback && (
+          <div className="mt-4 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
+            <strong>Feedback từ Lead:</strong>
+            <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
+          </div>
+        )}
+        <div className="mt-5 grid gap-4">
+          <Field
+            label="Tiêu đề ý tưởng"
+            value={title}
+            onChange={setTitle}
+            placeholder="Tên ý tưởng"
+          />
+          <label className="text-xs font-medium">
+            Mô tả / insight / hướng triển khai
+            <textarea
+              required
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="mt-2 min-h-28 w-full rounded-lg border border-border bg-background p-3 text-sm"
+            />
+          </label>
+          <Field
+            label="Loại sản phẩm / content"
+            value={contentType}
+            onChange={setContentType}
+            placeholder="Quần âu / Sơ mi / Polo"
+          />
+          <Field
+            label="Mục tiêu"
+            value={goal}
+            onChange={setGoal}
+            placeholder="Tăng tương tác"
+          />
+          <Field
+            label="Link video REF"
+            value={reference}
+            onChange={setReference}
+            placeholder="https://..."
+          />
+          <Field
+            label="Nền tảng"
+            value={platforms}
+            onChange={setPlatforms}
+            placeholder="TikTok, Reels"
+          />
+        </div>
+        <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-4 py-2 text-xs"
+          >
+            Hủy
+          </button>
+          <button
+            type="submit"
+            className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+          >
+            <Send className="mr-1 inline size-3" />
+            Gửi duyệt lại
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function ScriptEditor({
+  item,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  item: Item;
+  onClose: () => void;
+  onSave: (patch: Partial<Item>) => void;
+  onDelete: () => void;
+}) {
+  const [location, setLocation] = useState(item.location || "");
+  const [outfit, setOutfit] = useState(item.outfit || "");
+  const [props, setProps] = useState(item.props || "");
+  const [shots, setShots] = useState<Shot[]>(
+    item.shots || [{ no: 1, shot: "", angle: "", voice: "", text: "" }],
+  );
+  const addShot = () =>
+    setShots((all) => [
+      ...all,
+      { no: all.length + 1, shot: "", angle: "", voice: "", text: "" },
+    ]);
+  const updateShot = (index: number, key: keyof Shot, value: string) =>
+    setShots((all) =>
+      all.map((s, i) =>
+        i === index ? { ...s, [key]: key === "no" ? Number(value) : value } : s,
+      ),
+    );
+  const suggest = () =>
+    setShots([
+      {
+        no: 1,
+        shot: "Mở cảnh toàn thân với outfit hoàn chỉnh",
+        angle: "Wide shot ngang hông",
+        voice: "Hôm nay mặc gì để vừa thoải mái vừa nổi bật?",
+        text: "LOOK OF THE DAY",
+      },
+      {
+        no: 2,
+        shot: "Cận chất liệu và chi tiết phụ kiện",
+        angle: "Close-up chuyển động",
+        voice: "Điểm nhấn nằm ở chất liệu và phom dáng.",
+        text: "DETAILS MATTER",
+      },
+      {
+        no: 3,
+        shot: "Xoay người và kết bằng pose tự nhiên",
+        angle: "Medium shot tracking",
+        voice: "Lưu lại để thử outfit này nhé!",
+        text: "SAVE THIS LOOK",
+      },
+    ]);
+  return (
+    <div className="fixed inset-0 z-20 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
+            <p className="text-xs text-orange-500">
+              {statusLabels[item.status]}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+            {item.status === "video_needs_revision" && item.feedback && (
+              <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
+                <strong>Feedback từ Lead:</strong>
+                <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} aria-label="Đóng">
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field
+            label="Bối cảnh"
+            value={location}
+            onChange={setLocation}
+            placeholder="Studio / đường ph��..."
+          />
+          <Field
+            label="Trang phục"
+            value={outfit}
+            onChange={setOutfit}
+            placeholder="Mô tả styling..."
+          />
+          <Field
+            label="Đạo cụ"
+            value={props}
+            onChange={setProps}
+            placeholder="Túi, kính, hoa..."
+          />
+        </div>
+        <div className="mt-6 flex items-center justify-between">
+          <h3 className="font-medium">Shotlist chi tiết</h3>
+          <button
+            onClick={suggest}
+            className="inline-flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-700"
+          >
+            <Sparkles className="size-4" />
+            AI gợi ý kịch bản
+          </button>
+        </div>
+        <div className="mt-3 flex flex-col gap-3">
+          {shots.map((shot, i) => (
+            <div key={i} className="rounded-xl border border-border p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold">Shot {i + 1}</span>
+                <button
+                  onClick={() =>
+                    setShots((all) => all.filter((_, n) => n !== i))
+                  }
+                  className="text-muted-foreground"
+                  aria-label="Xóa shot"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(["shot", "angle", "voice", "text"] as const).map((key) => (
+                  <input
+                    key={key}
+                    value={shot[key]}
+                    onChange={(e) => updateShot(i, key, e.target.value)}
+                    className="h-9 rounded-lg border border-border bg-background px-3 text-xs"
+                    placeholder={
+                      {
+                        shot: "Shot quay",
+                        angle: "Góc quay",
+                        voice: "Lời thoại",
+                        text: "Chữ hiển thị",
+                      }[key]
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={addShot}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs"
+        >
+          <Plus className="size-4" />
+          Thêm dòng shotlist
+        </button>
+        <div className="mt-6 flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-between">
+          <button
+            onClick={onDelete}
+            className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs text-destructive"
+          >
+            <Trash2 className="size-4" />
+            Xóa nội dung
+          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-border px-4 py-2.5 text-xs"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onSave({
+                  location,
+                  outfit,
+                  props,
+                  shots,
+                  status:
+                    item.status === "approved_idea"
+                      ? "script_pending_creator"
+                      : item.status,
+                })
+              }
+              className="rounded-lg bg-primary px-4 py-2.5 text-xs font-medium text-primary-foreground"
+            >
+              {item.status === "approved_idea"
+                ? "Gửi kịch bản"
+                : "Lưu thay đổi"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  type?: string;
+}) {
+  return (
+    <label className="text-xs font-medium">
+      {label}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+      />
+    </label>
+  );
+}
+function CreatorWorkspace({
+  user,
+  view,
+  onViewChange,
+}: {
+  user: User;
+  view: string;
+  onViewChange: (view: string) => void;
+}) {
+  const [items, setItems] = useState<Item[]>(
+    demoItems.filter((item) =>
+      [
+        "script_pending_creator",
+        "script_approved",
+        "shooting_pending",
+        "shooting_done",
+        "editing_done",
+        "video_pending",
+        "video_needs_revision",
+        "ready_to_post",
+        "published",
+      ].includes(item.status),
+    ),
+  );
+  const [selected, setSelected] = useState<Item | null>(null);
+  const [timeRange, setTimeRange] = useState<
+    "today" | "week" | "month" | "30days"
+  >("30days");
+  const [creatorFilter, setCreatorFilter] = useState<
+    | "script"
+    | "shoot"
+    | "video"
+    | "revision"
+    | "ready"
+    | "published"
+    | "overdue"
+    | "all"
+  >("all");
+  const [publishedRange, setPublishedRange] = useState<
+    "all" | "today" | "yesterday" | "7days" | "30days" | "month"
+  >("all");
+  useEffect(() => {
+    const q = query(collection(db, "contentItems"));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const remote = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as Item,
+        );
+        if (remote.length)
+          setItems(
+            remote.filter(
+              (item) =>
+                !["archived", "rejected"].includes(item.status) &&
+                (item.ownerId === user.uid ||
+                  [
+                    "script_pending_creator",
+                    "script_approved",
+                    "video_pending",
+                    "video_needs_revision",
+                    "ready_to_post",
+                    "published",
+                  ].includes(item.status)),
+            ),
+          );
+      },
+      () => undefined,
+    );
+  }, []);
+  const update = async (item: Item, patch: Partial<Item>) => {
+    const isPublishing = patch.status === "published";
+    const nextPatch =
+      patch.status === "published"
+        ? { ...patch, status: "published" as Status }
+        : patch.status === "video_pending"
+          ? { ...patch, status: "video_pending" as Status }
+          : item.status === "script_pending_creator" &&
+              patch.status === "script_approved"
+            ? patch
+            : { ...patch, status: item.status };
+    setItems((all) =>
+      all.map((x) =>
+        x.id === item.id
+          ? { ...x, ...nextPatch, status: nextPatch.status || x.status }
+          : x,
+      ),
+    );
+    if (nextPatch.status === "published") onViewChange("Danh sách bài đăng");
+    setSelected(null);
+    if (!item.id.startsWith("demo-"))
+      await setDoc(
+        doc(db, "contentItems", item.id),
+        { ...nextPatch, status: nextPatch.status || item.status },
+        { merge: true },
+      );
+    if (nextPatch.status === "published") {
+      await notifyRole(
+        "lead",
+        {
+          title: "Creator vừa đăng bài",
+          message: `Creator ${user.displayName || "phụ trách"} vừa đăng bài '${item.title}' lên ${(nextPatch.platforms || item.platforms || []).join(", ") || "kênh chính thức"}!`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Duyệt video",
+          videoLink:
+            nextPatch.finalVideoLink ||
+            item.finalVideoLink ||
+            item.publishedLink,
+        },
+        user.uid,
+      );
+      await notifyRole(
+        "content",
+        {
+          title: "Creator vừa đăng bài",
+          message: `Creator ${user.displayName || "phụ trách"} vừa đăng bài '${item.title}' lên ${(nextPatch.platforms || item.platforms || []).join(", ") || "kênh chính thức"}!`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Tất cả Content / Viết Kịch Bản",
+        },
+        user.uid,
+      );
+    }
+    if (nextPatch.status === "video_pending")
+      await notifyRole(
+        "lead",
+        {
+          title: "Video mới chờ duyệt",
+          message: `🎬 Creator ${user.displayName || user.email || "phụ trách"} vừa tải lên video cho bài '${item.title}', đang chờ bạn duyệt!`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Duyệt video",
+          videoLink:
+            nextPatch.finalVideoLink ||
+            item.finalVideoLink ||
+            item.publishedLink,
+        },
+        user.uid,
+      );
+  };
+  const publishedItems = items
+    .filter((item) => item.status === "published")
+    .sort(
+      (a, b) => publishedTime(b.publishedAt) - publishedTime(a.publishedAt),
+    );
+  const filteredPublishedItems = publishedItems.filter((item) => {
+    const timestamp = publishedTime(item.publishedAt);
+    if (!timestamp || publishedRange === "all") return publishedRange === "all";
+    const now = new Date();
+    const date = new Date(timestamp);
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    if (publishedRange === "today") return date >= start;
+    if (publishedRange === "yesterday") {
+      const yesterday = new Date(start);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return date >= yesterday && date < start;
+    }
+    if (publishedRange === "7days") {
+      const sevenDays = new Date(start);
+      sevenDays.setDate(sevenDays.getDate() - 7);
+      return date >= sevenDays;
+    }
+    if (publishedRange === "30days") {
+      const thirtyDays = new Date(start);
+      thirtyDays.setDate(thirtyDays.getDate() - 30);
+      return date >= thirtyDays;
+    }
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth()
+    );
+  });
+  const allCreatorItems = items.filter((item) =>
+    [
+      "script_pending_creator",
+      "script_approved",
+      "shooting_pending",
+      "shooting_done",
+      "editing_done",
+      "video_pending",
+      "needs_revision",
+      "ready_to_post",
+    ].includes(item.status),
+  );
+  const visible =
+    creatorFilter === "script"
+      ? items.filter((item) => item.status === "script_pending_creator")
+      : creatorFilter === "shoot"
+        ? items.filter((item) => item.status === "script_approved")
+        : creatorFilter === "video"
+          ? items.filter((item) => item.status === "video_pending")
+          : creatorFilter === "revision"
+            ? items.filter((item) => item.status === "video_needs_revision")
+            : creatorFilter === "ready"
+              ? items.filter((item) => item.status === "ready_to_post")
+              : creatorFilter === "published"
+                ? filteredPublishedItems
+                : creatorFilter === "overdue"
+                  ? items.filter(
+                      (item) =>
+                        item.status !== "published" &&
+                        !!item.scheduledAt &&
+                        new Date(item.scheduledAt).getTime() < Date.now(),
+                    )
+                  : view === "Cần Feedback / Sửa Video"
+                    ? items.filter(
+                        (item) => item.status === "video_needs_revision",
+                      )
+                    : view === "Danh sách bài đăng"
+                      ? filteredPublishedItems
+                      : allCreatorItems;
+  return (
+    <>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-orange-500">
+            Creator workflow
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
+          {view === "Danh sách bài đăng" && (
+            <label className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-zinc-700">
+              Lọc theo ngày đăng
+              <select
+                value={publishedRange}
+                onChange={(event) =>
+                  setPublishedRange(event.target.value as typeof publishedRange)
+                }
+                className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-xs text-zinc-900 shadow-sm"
+              >
+                <option value="all">Tất cả</option>
+                <option value="today">Hôm nay</option>
+                <option value="yesterday">Hôm qua</option>
+                <option value="7days">7 ngày trước</option>
+                <option value="30days">30 ngày trước</option>
+                <option value="month">Tháng này</option>
+              </select>
+            </label>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tiếp nhận k���ch bản, tối ưu lịch quay và bàn giao bản dựng.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Bộ lọc thời gian"
+            value={timeRange}
+            onChange={(event) =>
+              setTimeRange(event.target.value as typeof timeRange)
+            }
+            className="rounded-lg border border-border bg-card px-2 py-2 text-xs"
+          >
+            <option value="today">Hôm nay</option>
+            <option value="week">Tuần này</option>
+            <option value="month">Tháng này</option>
+            <option value="30days">30 ngày qua</option>
+          </select>
+          <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+            {visible.length} bài trong luồng
+          </div>
+        </div>
+      </div>
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+        {[
+          [
+            "Kịch bản chờ duyệt",
+            "script",
+            items.filter((i) => i.status === "script_pending_creator"),
+            FileText,
+          ],
+          [
+            "Bài chờ quay / dựng",
+            "shoot",
+            items.filter((i) => i.status === "script_approved"),
+            Film,
+          ],
+          [
+            "Video chờ Lead duyệt",
+            "video",
+            items.filter((i) => i.status === "video_pending"),
+            Send,
+          ],
+          [
+            "Cần sửa theo Feedback",
+            "revision",
+            items.filter((i) => i.status === "needs_revision"),
+            AlertTriangle,
+          ],
+          [
+            "Video đã duyệt / sẵn sàng đăng",
+            "ready",
+            items.filter((i) => i.status === "ready_to_post"),
+            Check,
+          ],
+          [
+            "Bài đã đăng",
+            "published",
+            items.filter((i) => i.status === "published"),
+            Check,
+          ],
+          [
+            "Bài quá hạn / trễ deadline",
+            "overdue",
+            items.filter(
+              (i) =>
+                i.status !== "published" &&
+                !!i.scheduledAt &&
+                new Date(i.scheduledAt).getTime() < Date.now(),
+            ),
+            AlertTriangle,
+          ],
+        ].map(([label, filter, list, Icon]: any) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setCreatorFilter(filter)}
+            className={`rounded-xl border bg-card p-3 text-left ${creatorFilter === filter ? "border-orange-400 bg-orange-50" : "border-border"}`}
+          >
+            <Icon className="mb-2 size-4 text-orange-500" />
+            <p className="text-xl font-semibold">{list.length}</p>
+            <p className="mt-1 text-xs leading-tight text-muted-foreground">
+              {label}
+            </p>
+          </button>
+        ))}
+      </div>
+      {view === "Danh sách bài đăng" ? (
+        <div className="grid gap-3">
+          {publishedItems.length ? (
+            publishedItems.map((item) => (
+              <article
+                key={item.id}
+                className="grid gap-4 rounded-xl border border-border bg-card p-4 md:grid-cols-[1.4fr_1fr_auto]"
+              >
+                <div>
+                  <VideoPreview
+                    url={item.finalVideoLink}
+                    kind="final"
+                    title={item.title}
+                  />
+                  <p className="mt-2 text-sm font-medium">
+                    {item.caption || item.title}
+                  </p>
+                </div>
+                <div className="flex flex-wrap content-start gap-2">
+                  {(item.platforms || []).map((platform) => (
+                    <span
+                      key={platform}
+                      className="rounded-full bg-accent px-2 py-1 text-xs"
+                    >
+                      {platform}
+                    </span>
+                  ))}
+                  <p className="w-full text-xs text-muted-foreground">
+                    Đăng dự kiến:{" "}
+                    {item.scheduledAt
+                      ? new Date(item.scheduledAt).toLocaleString("vi-VN")
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <a
+                    href={item.publishedLink || item.finalVideoLink || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-lg border border-border px-3 py-2 text-xs"
+                  >
+                    Mở link gốc
+                  </a>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+              Chưa có bài đã đăng.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {visible.length ? (
+            visible.map((item) => (
+              <CreatorCard
+                key={item.id}
+                item={item}
+                onOpen={() => setSelected(item)}
+              />
+            ))
+          ) : (
+            <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+              Chưa có bài viết trong công đoạn này.
+            </div>
+          )}
+        </div>
+      )}
+      {selected && (
+        <CreatorEditor
+          item={selected}
+          user={user}
+          onClose={() => setSelected(null)}
+          onSave={(patch) => update(selected, patch)}
+        />
+      )}
+    </>
+  );
+}
+
+function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
+  const overdue =
+    !!item.scheduledAt &&
+    new Date(item.scheduledAt).getTime() < Date.now() &&
+    item.status !== "published";
+  return (
+    <article
+      className={`rounded-xl border bg-card p-4 ${overdue ? "border-destructive" : "border-border"}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`text-[10px] uppercase tracking-wider ${item.status === "video_needs_revision" ? "text-destructive" : "text-orange-500"}`}
+            >
+              {item.status === "video_needs_revision"
+                ? "CẦN FEEDBACK / CẦN SỬA"
+                : statusLabels[item.status]}
+            </span>
+            {item.status === "video_needs_revision" && item.feedback && (
+              <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
+                Feedback mới
+              </span>
+            )}
+            {overdue && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-destructive">
+                <AlertTriangle className="size-3" />
+                Quá deadline
+              </span>
+            )}
+          </div>
+          <h2 className="mt-1 font-medium">{item.title}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {item.location || "Chưa có bối cảnh"} ·{" "}
+            {item.outfit || "Chưa có outfit"}
+          </p>
+          {item.status === "published" && (
+            <div className="mt-3 rounded-lg bg-stone-50 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                Caption
+              </p>
+              <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-zinc-800">
+                {item.caption || "Chưa có caption"}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
+                <span className="inline-flex items-center gap-1">
+                  <CalendarDays className="size-3" />
+                  {publishedLabel(item.publishedAt)}
+                </span>
+                {(item.platforms || []).map((platform) => (
+                  <span
+                    key={platform}
+                    className={`rounded-full px-2 py-1 text-[10px] font-semibold ${platform.toLowerCase().includes("tiktok") ? "bg-zinc-900 text-white" : platform.toLowerCase().includes("shopee") ? "bg-orange-500 text-white" : "bg-blue-600 text-white"}`}
+                  >
+                    {platform}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <VideoPreview {...primaryVideo(item)} title={item.title} />
+        </div>
+        <button
+          onClick={onOpen}
+          className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs"
+        >
+          Mở bài
+        </button>
+      </div>
+      {item.scheduledAt && (
+        <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <CalendarDays className="size-3" />
+          Đăng dự kiến: {new Date(item.scheduledAt).toLocaleString("vi-VN")}
+        </p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
+          {item.shots?.length || 0} shots
+        </span>
+        {item.platforms?.map((p) => (
+          <span
+            key={p}
+            className="rounded-full border border-border px-2 py-1 text-[10px]"
+          >
+            {p}
+          </span>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function CreatorEditor({
+  item,
+  user,
+  onClose,
+  onSave,
+}: {
+  item: Item;
+  user: User;
+  onClose: () => void;
+  onSave: (patch: Partial<Item>) => void;
+}) {
+  const [draft, setDraft] = useState(item);
+  const [toast, setToast] = useState("");
+  const [toastError, setToastError] = useState(false);
+  const [publishErrors, setPublishErrors] = useState({
+    scheduledAt: false,
+    finalVideoLink: false,
+  });
+  const set = (key: keyof Item, value: string) => {
+    setDraft((old) => ({ ...old, [key]: value }));
+    if (key === "scheduledAt" || key === "finalVideoLink")
+      setPublishErrors((old) => ({ ...old, [key]: false }));
+  };
+  const showToast = (message: string, error = false) => {
+    setToast(message);
+    setToastError(error);
+    window.setTimeout(() => {
+      setToast("");
+      setToastError(false);
+    }, 3000);
+  };
+  const handleSaveDraft = () => {
+    onSave({ ...draft, status: item.status });
+    showToast("Đã lưu thay đổi thông tin bài viết!");
+  };
+  const handleSubmitForReview = () => {
+    const errors = {
+      scheduledAt: !draft.scheduledAt?.trim(),
+      finalVideoLink: !draft.finalVideoLink?.trim(),
+    };
+    if (errors.scheduledAt || errors.finalVideoLink) {
+      setPublishErrors(errors);
+      showToast(
+        "Vui lòng nhập đầy đủ 'Thời gian dự kiến đăng bài' và 'Link video hoàn chỉnh' trước khi gửi duyệt!",
+        true,
+      );
+      return;
+    }
+    onSave({ ...draft, status: "video_pending" });
+    showToast("Đã gửi video cho Lead duyệt!");
+    onClose();
+  };
+  const handlePublish = () => {
+    const errors = {
+      scheduledAt: !draft.scheduledAt?.trim(),
+      finalVideoLink: !draft.finalVideoLink?.trim(),
+    };
+    if (errors.scheduledAt || errors.finalVideoLink) {
+      setPublishErrors(errors);
+      showToast(
+        "Vui lòng nhập đầy đủ 'Thời gian dự kiến đăng bài' và 'Link video hoàn chỉnh' trước khi bấm Đăng bài!",
+        true,
+      );
+      return;
+    }
+    onSave({ ...draft, status: "published", publishedAt: new Date() });
+    showToast("Đã chuyển bài viết sang trạng thái BÀI ĐÃ ĐĂNG thành công!");
+    onClose();
+  };
+  const save = (patch: Partial<Item> = {}) => onSave({ ...draft, ...patch });
+  return (
+    <div className="fixed inset-0 z-20 grid place-items-end bg-black/40 sm:place-items-center sm:p-4">
+      <section className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6">
+        <div className="mb-5 flex items-start justify-between">
+          <div>
+            <p className="text-xs text-orange-500">
+              {statusLabels[item.status]}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">{item.title}</h2>
+            {item.status === "video_needs_revision" && item.feedback && (
+              <div className="mt-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-xs text-orange-900">
+                <strong>Feedback từ Lead:</strong>
+                <p className="mt-1 whitespace-pre-wrap">{item.feedback}</p>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} aria-label="Đóng">
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CreatorInput
+            label="Bối cảnh"
+            value={draft.location || ""}
+            onChange={(v) => set("location", v)}
+          />
+          <CreatorInput
+            label="Outfit"
+            value={draft.outfit || ""}
+            onChange={(v) => set("outfit", v)}
+          />
+          <CreatorInput
+            label="Đạo cụ"
+            value={draft.props || ""}
+            onChange={(v) => set("props", v)}
+          />
+          <CreatorInput
+            label="Thời gian dự kiến đăng bài"
+            type="datetime-local"
+            value={draft.scheduledAt || ""}
+            onChange={(v) => set("scheduledAt", v)}
+            error={publishErrors.scheduledAt}
+          />
+          <div>
+            {draft.reference && (
+              <VideoPreview
+                url={draft.reference}
+                kind="ref"
+                title={draft.title}
+              />
+            )}
+            <CreatorInput
+              label="Link source Google Drive"
+              value={draft.sourceLink || ""}
+              onChange={(v) => set("sourceLink", v)}
+            />
+            <VideoPreview
+              url={draft.sourceLink}
+              kind="source"
+              title={draft.title}
+            />
+          </div>
+          <div>
+            <CreatorInput
+              label="Link video hoàn chỉnh"
+              value={draft.finalVideoLink || ""}
+              onChange={(v) => set("finalVideoLink", v)}
+              error={publishErrors.finalVideoLink}
+            />
+            <VideoPreview
+              url={draft.finalVideoLink}
+              kind="final"
+              title={draft.title}
+            />
+          </div>
+          <section className="sm:col-span-2 rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Shotlist chi tiết</h3>
+              {draft.shotlistLink && (
+                <a
+                  href={draft.shotlistLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-border bg-background px-3 py-2 text-xs"
+                >
+                  Mở link shotlist
+                </a>
+              )}
+            </div>
+            {draft.shots?.length ? (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[620px] text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground">
+                      <th className="px-2 py-2">#</th>
+                      <th className="px-2 py-2">Shot / Nội dung</th>
+                      <th className="px-2 py-2">Góc máy</th>
+                      <th className="px-2 py-2">Voice</th>
+                      <th className="px-2 py-2">Text màn hình</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draft.shots.map((shot) => (
+                      <tr key={shot.no} className="border-b border-border/60">
+                        <td className="px-2 py-2">{shot.no}</td>
+                        <td className="px-2 py-2">{shot.shot || "—"}</td>
+                        <td className="px-2 py-2">{shot.angle || "—"}</td>
+                        <td className="px-2 py-2">{shot.voice || "—"}</td>
+                        <td className="px-2 py-2">{shot.text || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Content chưa nhập shotlist chi tiết.
+              </p>
+            )}
+          </section>
+          <fieldset className="sm:col-span-2">
+            <legend className="text-xs font-medium">Nền tảng đăng bài</legend>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                "TikTok",
+                "Shopee Video",
+                "Instagram Reels",
+                "Facebook Reels",
+                "YouTube Shorts",
+              ].map((platform) => (
+                <label
+                  key={platform}
+                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs"
+                >
+                  <input
+                    type="checkbox"
+                    checked={(draft.platforms || []).includes(platform)}
+                    onChange={() =>
+                      setDraft((old) => ({
+                        ...old,
+                        platforms: (old.platforms || []).includes(platform)
+                          ? (old.platforms || []).filter(
+                              (value) => value !== platform,
+                            )
+                          : [...(old.platforms || []), platform],
+                      }))
+                    }
+                  />
+                  {platform}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="text-xs font-medium sm:col-span-2">
+            Caption bài post
+            <textarea
+              value={draft.caption || ""}
+              onChange={(e) => set("caption", e.target.value)}
+              className="mt-2 min-h-20 w-full rounded-lg border border-border bg-background p-3 text-sm"
+              placeholder="Tiêu đề và hashtag..."
+            />
+          </label>
+          <label className="text-xs font-medium sm:col-span-2">
+            Ghi chú set quay / gửi Lead
+            <textarea
+              value={draft.shootNote || draft.leadNote || ""}
+              onChange={(e) => {
+                set("shootNote", e.target.value);
+                set("leadNote", e.target.value);
+              }}
+              className="mt-2 min-h-20 w-full rounded-lg border border-border bg-background p-3 text-sm"
+              placeholder="Ghi chú feedback, ánh sáng, bối cảnh..."
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border px-3 text-xs"
+          >
+            <Save className="size-4" />
+            Lưu chỉnh sửa
+          </button>
+          {[
+            "script_approved",
+            "shooting_pending",
+            "shooting_done",
+            "editing_done",
+            "needs_revision",
+          ].includes(item.status) && (
+            <button
+              type="button"
+              onClick={handleSubmitForReview}
+              aria-label="G���i video cho Lead duyệt"
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              <Send className="size-4" />
+              Gửi duyệt video
+            </button>
+          )}
+          {item.status === "script_pending_creator" && (
+            <button
+              onClick={() => save({ status: "script_approved" })}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"
+            >
+              <Check className="size-4" />
+              Duyệt kịch bản
+            </button>
+          )}
+          {item.status === "shooting_pending" && (
+            <button
+              onClick={() => save({ status: "shooting_done" })}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"
+            >
+              <Film className="size-4" />
+              Đã quay xong
+            </button>
+          )}
+          {item.status === "ready_to_post" && (
+            <button
+              type="button"
+              onClick={handlePublish}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-xs text-primary-foreground"
+            >
+              <Check className="size-4" />
+              Đăng bài
+            </button>
+          )}
+        </div>
+        {toast && (
+          <div
+            role="status"
+            className={`fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-xs text-white shadow-lg ${toastError ? "bg-red-600" : "bg-emerald-600"}`}
+          >
+            {toast}
+          </div>
+        )}
+        <TaskChat item={item} user={user} role="creator" />
+      </section>
+    </div>
+  );
+}
+
+function TaskChat({
+  item,
+  user,
+  role,
+}: {
+  item: Item;
+  user: User;
+  role: UserRole;
+}) {
+  const [messages, setMessages] = useState<TaskMessage[]>([]);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (item.id.startsWith("demo-")) return;
+    return onSnapshot(
+      collection(db, "contentItems", item.id, "messages"),
+      (snap) =>
+        setMessages(
+          snap.docs
+            .map((entry) => ({ id: entry.id, ...entry.data() }) as TaskMessage)
+            .sort((a, b) =>
+              String(a.createdAt || "").localeCompare(
+                String(b.createdAt || ""),
+              ),
+            ),
+        ),
+      () => undefined,
+    );
+  }, [item.id]);
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    const value = text.trim();
+    if (!value || item.id.startsWith("demo-")) return;
+    setSending(true);
+    setText("");
+    try {
+      await addDoc(collection(db, "contentItems", item.id, "messages"), {
+        text: value,
+        senderName: user.displayName || user.email || "Thành viên",
+        senderRole: role,
+        senderId: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      await setDoc(
+        doc(db, "contentItems", item.id),
+        {
+          feedbackUnread: (item.feedbackUnread || 0) + 1,
+          ...(role === "lead" ? { feedback: value, leadNote: value } : {}),
+        },
+        { merge: true },
+      );
+      await notifyRole(
+        role === "lead" ? "content" : role === "content" ? "creator" : "lead",
+        {
+          title: "Tin nhắn mới trong Feedback & Trao đổi",
+          message: `${user.displayName || user.email || "Thành viên"} (${roleLabels[role]}): ${value.slice(0, 100)}`,
+          type: "chat",
+          linkId: item.id,
+          targetView:
+            role === "lead"
+              ? "Tất cả Content / Viết Kịch Bản"
+              : role === "content"
+                ? "Cần Feedback / Sửa Video"
+                : "Duyệt video",
+        },
+        user.uid,
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div className="mt-5 rounded-xl border border-border bg-background p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <MessageCircle className="size-4 text-orange-500" />
+          Feedback & Trao đổi
+        </div>
+        {messages.length > 0 && (
+          <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
+            {messages.length} tin nhắn
+          </span>
+        )}
+      </div>
+      <div className="max-h-48 space-y-2 overflow-y-auto">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className="rounded-lg border border-border bg-card p-2.5 text-xs"
+          >
+            <div className="flex justify-between gap-2">
+              <b>{message.senderName}</b>
+              <span className="text-muted-foreground">
+                {roleLabels[message.senderRole]}
+              </span>
+            </div>
+            <p className="mt-1 whitespace-pre-wrap">{message.text}</p>
+          </div>
+        ))}
+        {!messages.length && (
+          <p className="text-xs text-muted-foreground">
+            Chưa có trao đổi. Hãy để lại ghi chú cho team.
+          </p>
+        )}
+      </div>
+      <form onSubmit={send} className="mt-3 flex gap-2">
+        <input
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          aria-label="Gửi feedback"
+          placeholder="Viết phản hồi hoặc d��n link..."
+          className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 text-xs"
+        />
+        <button
+          disabled={sending || item.id.startsWith("demo-")}
+          aria-label="Gửi feedback"
+          className="rounded-lg bg-primary px-3 text-primary-foreground"
+        >
+          <Send className="size-4" />
+        </button>
+      </form>
+      {item.id.startsWith("demo-") && (
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Trao đổi realtime khả dụng sau khi bài ��ư���c lưu vào Firestore.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CreatorInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  error = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  error?: boolean;
+}) {
+  return (
+    <label className="text-xs font-medium">
+      {label}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={error}
+        className={`mt-2 h-10 w-full rounded-lg border bg-background px-3 text-sm ${error ? "border-red-500 ring-1 ring-red-300" : "border-border"}`}
+      />
+    </label>
+  );
+}
 
 function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
-  const [items, setItems] = useState<Item[]>(demoItems); const [selected, setSelected] = useState<Item | null>(null); const [note, setNote] = useState(''); const [cleanupBusy, setCleanupBusy] = useState(false); const [cleanupToast, setCleanupToast] = useState(''); const [settings, setSettings] = useState({ platforms: platformOptions, contentTypes, goals: ['Tăng tương tác', 'Chuyển đ���i', 'Branding'], overdueHours: 24 }); const [kpis, setKpis] = useState<Record<string, number>>({ content: 15, creator: 20 }); const [saving, setSaving] = useState(false)
-  useEffect(() => { const unsub = onSnapshot(collection(db, 'contentItems'), (snap) => { const remote = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Item)); setItems(remote) }, () => undefined); const settingsUnsub = onSnapshot(doc(db, 'app_settings', 'workflow'), (snap) => { if (snap.exists()) setSettings((old) => ({ ...old, ...(snap.data() as any) })) }, () => undefined); return () => { unsub(); settingsUnsub() } }, [])
-  const updateStatus = async (item: Item, status: Status, extra: Partial<Item> = {}) => { const patch = { status, ...extra }; setItems((all) => all.map((x) => x.id === item.id ? { ...x, ...patch } : x)); setSelected(null); setNote(''); if (!item.id.startsWith('demo-')) await setDoc(doc(db, 'contentItems', item.id), patch, { merge: true }) }
-  const saveSettings = async () => { setSaving(true); await setDoc(doc(db, 'app_settings', 'workflow'), settings, { merge: true }); if (typeof window !== 'undefined') localStorage.setItem('happyorsad-settings-updated', String(Date.now())); setSaving(false) }; const cleanupTestData = async () => { if (cleanupBusy || !window.confirm('Xác nhận dọn sạch tất cả ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống, tài khoản và phân quyền s��� được giữ nguyên.')) return; setCleanupBusy(true); try { const [contentSnap, notificationSnap] = await Promise.all([getDocs(collection(db, 'contentItems')), getDocs(collection(db, 'notifications'))]); await Promise.all([...contentSnap.docs, ...notificationSnap.docs].map((entry) => deleteDoc(entry.ref))); setItems([]); setSelected(null); setCleanupToast('Đã dọn sạch các ý tưởng và bài viết test! Cấu hình hệ thống vẫn giữ nguyên.'); window.setTimeout(() => setCleanupToast(''), 4000) } finally { setCleanupBusy(false) } }
-  const pendingIdeas = items.filter((i) => ['idea_pending', 'idea_needs_revision'].includes(i.status)); const pendingScripts = items.filter((i) => i.status === 'script_pending'); const pendingVideos = items.filter((i) => ['video_pending', 'video_needs_revision'].includes(i.status)); const archived = items.filter((i) => i.status === 'archived'); const published = items.filter((i) => i.status === 'published');
-  if (view === 'Cấu hình hệ thống') return <section><p className="text-xs uppercase tracking-widest text-orange-500">Admin system settings</p><h1 className="mt-1 text-2xl font-semibold">Cấu hình hệ thống</h1><p className="mt-2 text-sm text-muted-foreground">Dữ liệu được đồng bộ realtime cho Content và Creator.</p><div className="mt-5 rounded-xl border-2 border-red-200 bg-red-50 p-5"><div className="flex items-start gap-3"><Trash2 className="mt-0.5 size-5 shrink-0 text-red-600" /><div><h2 className="font-semibold text-red-900">Dọn dẹp dữ liệu bài viết test</h2><p className="mt-1 text-xs leading-5 text-red-800">Xóa ý tưởng, kịch bản, video, bài đăng và thông báo test. Cấu hình hệ thống, tài khoản và phân quyền vẫn được giữ nguyên.</p><button type="button" disabled={cleanupBusy} onClick={cleanupTestData} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60"><Trash2 className="size-4" />{cleanupBusy ? 'Đang dọn dẹp...' : 'Dọn dẹp dữ liệu bài viết test'}</button></div></div>{cleanupToast && <div role="status" className="mt-3 rounded-lg bg-emerald-100 px-4 py-3 text-xs text-emerald-900">{cleanupToast}</div>}</div><div className="mt-6 grid gap-4 lg:grid-cols-2"><SettingsBox title="Kênh đăng bài" values={settings.platforms} onChange={(v) => setSettings({ ...settings, platforms: v })} /><SettingsBox title="Dạng Content" values={settings.contentTypes} onChange={(v) => setSettings({ ...settings, contentTypes: v })} /><SettingsBox title="Mục tiêu Content" values={settings.goals} onChange={(v) => setSettings({ ...settings, goals: v })} /><div className="rounded-xl border border-border bg-card p-5"><h2 className="font-medium">Thiết lập KPI nhân sự</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs">Content / kịch bản được duyệt<input type="number" value={kpis.content} onChange={(e) => setKpis({ ...kpis, content: Number(e.target.value) })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3" /></label><label className="text-xs">Creator / video đã đăng<input type="number" value={kpis.creator} onChange={(e) => setKpis({ ...kpis, creator: Number(e.target.value) })} className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3" /></label></div><button onClick={async () => { await setDoc(doc(db, 'kpis', new Date().toISOString().slice(0, 7)), { month: new Date().toISOString().slice(0, 7), ...kpis }, { merge: true }) }} className="mt-4 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">Lưu KPI tháng</button></div></div><button disabled={saving} onClick={saveSettings} className="mt-5 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">{saving ? 'Đang lưu...' : 'Lưu cấu hình realtime'}</button><section aria-label="Dọn dẹp dữ liệu test" className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"><div className="flex items-start gap-3"><Trash2 className="mt-0.5 size-5 shrink-0 text-red-600" /><div className="min-w-0"><h2 className="font-semibold text-red-900">Dọn dẹp dữ liệu bài viết test</h2><p className="mt-1 text-xs leading-5 text-red-800">Nút này chỉ xóa ý tưởng, kịch bản, video, bài đăng và thông báo. Cấu hình hệ thống, tài khoản và phân quyền không bị xóa.</p><button type="button" disabled={cleanupBusy} onClick={cleanupTestData} className="mt-4 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{cleanupBusy ? 'Đang dọn dẹp...' : 'Xác nhận dọn dẹp dữ liệu test'}</button>{cleanupToast && <p role="status" className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-900">{cleanupToast}</p>}</div></div></section></section>
-  const shown = view === 'Kho lưu trữ' || view === 'Kho Lưu Trữ' ? archived : view === 'Duyệt content' ? [...pendingIdeas, ...pendingScripts] : items;
-  return <section><p className="text-xs uppercase tracking-widest text-orange-500">Lead control center</p><h1 className="mt-1 text-2xl font-semibold">{view}</h1><div className="my-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">{[['Ý tưởng chờ duyệt', pendingIdeas.length, Lightbulb], ['Kịch bản chờ duyệt', pendingScripts.length, Pencil], ['Video chờ duyệt', pendingVideos.length, Film], ['Content đã duyệt', items.filter((i) => ['scripting', 'shooting_pending', 'shooting_done', 'editing_done', 'published'].includes(i.status)).length, Check], ['Video chưa đăng', items.filter((i) => ['shooting_pending', 'shooting_done', 'editing_done'].includes(i.status)).length, Film], ['Đã đăng tháng này', published.length, Check], ['Trễ deadline', items.filter((i) => i.scheduledAt && new Date(i.scheduledAt) < new Date() && i.status !== 'published').length, AlertTriangle]].map(([label, value, Icon]: any) => <div key={label} className="min-w-0 rounded-xl border border-border bg-card p-3"><Icon className="mb-2 size-4 text-orange-500" /><p className="text-xl font-semibold leading-none">{value}</p><p className="mt-2 text-xs leading-tight text-muted-foreground">{label}</p></div>)}</div><div className="mt-6 rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">KPI Team Media</h2><div className="mt-4 grid gap-4 sm:grid-cols-2">{[['Content', Math.min(8 / kpis.content, 1), 8, kpis.content], ['Creator', Math.min(published.length / kpis.creator, 1), published.length, kpis.creator]].map(([name, progress, done, target]: any) => <div key={name}><div className="flex justify-between text-xs"><span>{name}</span><span>{done}/{target}</span></div><div className="mt-2 h-2 rounded-full bg-accent"><div className="h-2 rounded-full bg-orange-500" style={{ width: `${progress * 100}%` }} /></div></div>)}</div></div><div className="mt-6 grid gap-3">{shown.length ? shown.map((item) => <article key={item.id} className="rounded-xl border border-border bg-card p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span><h2 className="mt-1 font-medium">{item.title}</h2><p className="mt-1 text-xs text-muted-foreground">{item.caption || item.description || 'Chưa có mô tả.'}</p></div><div className="flex flex-wrap gap-2">{item.status === 'idea_pending' && <><button onClick={() => updateStatus(item, 'scripting')} className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">Duyệt ý tưởng</button><button onClick={() => updateStatus(item, 'archived')} className="rounded-lg border border-border px-3 py-2 text-xs">Lưu trữ</button><button onClick={() => setSelected(item)} className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive">Từ chối</button></>}{item.status === 'editing_done' && <><button onClick={() => updateStatus(item, 'published', { publishedLink: item.publishedLink || 'Đã đăng' })} className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">Duyệt video</button><button onClick={() => setSelected(item)} className="rounded-lg border border-orange-400 px-3 py-2 text-xs">Yêu cầu sửa</button></>}{item.status === 'archived' && <button onClick={() => updateStatus(item, 'idea_pending')} className="rounded-lg border border-border px-3 py-2 text-xs">Kích hoạt lại</button>}</div></div></article>) : <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Chưa có bài trong luồng này.</div>}</div>{selected && <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4"><section className="w-full max-w-md rounded-2xl bg-card p-5"><h2 className="font-semibold">Ph����n hồi Lead</h2><textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} className="mt-4 min-h-28 w-full rounded-lg border border-border bg-background p-3 text-sm" placeholder="Nhập lý do từ chối hoặc ghi chú sửa..." /><div className="mt-4 flex justify-end gap-2"><button onClick={() => setSelected(null)} className="rounded-lg border border-border px-4 py-2 text-xs">Hủy</button><button onClick={() => updateStatus(selected, selected.status === 'editing_done' ? 'shooting_done' : 'rejected', { feedback: note, leadNote: note })} className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">Xác nhận</button></div></section></div>}</section>
+  const [items, setItems] = useState<Item[]>(demoItems);
+  const [selected, setSelected] = useState<Item | null>(null);
+  const [note, setNote] = useState("");
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupToast, setCleanupToast] = useState("");
+  const [settings, setSettings] = useState({
+    platforms: platformOptions,
+    contentTypes,
+    goals: ["Tăng tương tác", "Chuyển đ���i", "Branding"],
+    overdueHours: 24,
+  });
+  const [kpis, setKpis] = useState<Record<string, number>>({
+    content: 15,
+    creator: 20,
+  });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "contentItems"),
+      (snap) => {
+        const remote = snap.docs.map(
+          (d) => ({ id: d.id, ...d.data() }) as Item,
+        );
+        setItems(remote);
+      },
+      () => undefined,
+    );
+    const settingsUnsub = onSnapshot(
+      doc(db, "app_settings", "workflow"),
+      (snap) => {
+        if (snap.exists())
+          setSettings((old) => ({ ...old, ...(snap.data() as any) }));
+      },
+      () => undefined,
+    );
+    return () => {
+      unsub();
+      settingsUnsub();
+    };
+  }, []);
+  const updateStatus = async (
+    item: Item,
+    status: Status,
+    extra: Partial<Item> = {},
+  ) => {
+    const patch = { status, ...extra };
+    setItems((all) =>
+      all.map((x) => (x.id === item.id ? { ...x, ...patch } : x)),
+    );
+    setSelected(null);
+    setNote("");
+    if (!item.id.startsWith("demo-"))
+      await setDoc(doc(db, "contentItems", item.id), patch, { merge: true });
+  };
+  const saveSettings = async () => {
+    setSaving(true);
+    await setDoc(doc(db, "app_settings", "workflow"), settings, {
+      merge: true,
+    });
+    if (typeof window !== "undefined")
+      localStorage.setItem("happyorsad-settings-updated", String(Date.now()));
+    setSaving(false);
+  };
+  const cleanupTestData = async () => {
+    if (
+      cleanupBusy ||
+      !window.confirm(
+        "Xác nhận dọn sạch tất cả ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống, tài khoản và phân quyền s��� được giữ nguyên.",
+      )
+    )
+      return;
+    setCleanupBusy(true);
+    try {
+      const [contentSnap, notificationSnap] = await Promise.all([
+        getDocs(collection(db, "contentItems")),
+        getDocs(collection(db, "notifications")),
+      ]);
+      await Promise.all(
+        [...contentSnap.docs, ...notificationSnap.docs].map((entry) =>
+          deleteDoc(entry.ref),
+        ),
+      );
+      setItems([]);
+      setSelected(null);
+      setCleanupToast(
+        "Đã dọn sạch các ý tưởng và bài viết test! Cấu hình hệ thống vẫn giữ nguyên.",
+      );
+      window.setTimeout(() => setCleanupToast(""), 4000);
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+  const pendingIdeas = items.filter((i) =>
+    ["idea_pending", "idea_needs_revision"].includes(i.status),
+  );
+  const pendingScripts = items.filter((i) => i.status === "script_pending");
+  const pendingVideos = items.filter((i) =>
+    ["video_pending", "video_needs_revision"].includes(i.status),
+  );
+  const archived = items.filter((i) => i.status === "archived");
+  const published = items.filter((i) => i.status === "published");
+  if (view === "Cấu hình hệ thống")
+    return (
+      <section>
+        <p className="text-xs uppercase tracking-widest text-orange-500">
+          Admin system settings
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold">Cấu hình hệ thống</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Dữ liệu được đồng bộ realtime cho Content và Creator.
+        </p>
+        <div className="mt-5 rounded-xl border-2 border-red-200 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <Trash2 className="mt-0.5 size-5 shrink-0 text-red-600" />
+            <div>
+              <h2 className="font-semibold text-red-900">
+                Dọn dẹp dữ liệu bài viết test
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-red-800">
+                Xóa ý tưởng, kịch bản, video, bài đăng và thông báo test. Cấu
+                hình hệ thống, tài khoản và phân quyền vẫn được giữ nguyên.
+              </p>
+              <button
+                type="button"
+                disabled={cleanupBusy}
+                onClick={cleanupTestData}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm disabled:opacity-60"
+              >
+                <Trash2 className="size-4" />
+                {cleanupBusy
+                  ? "Đang dọn dẹp..."
+                  : "Dọn dẹp dữ liệu bài viết test"}
+              </button>
+            </div>
+          </div>
+          {cleanupToast && (
+            <div
+              role="status"
+              className="mt-3 rounded-lg bg-emerald-100 px-4 py-3 text-xs text-emerald-900"
+            >
+              {cleanupToast}
+            </div>
+          )}
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <SettingsBox
+            title="Kênh đăng bài"
+            values={settings.platforms}
+            onChange={(v) => setSettings({ ...settings, platforms: v })}
+          />
+          <SettingsBox
+            title="Dạng Content"
+            values={settings.contentTypes}
+            onChange={(v) => setSettings({ ...settings, contentTypes: v })}
+          />
+          <SettingsBox
+            title="Mục tiêu Content"
+            values={settings.goals}
+            onChange={(v) => setSettings({ ...settings, goals: v })}
+          />
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h2 className="font-medium">Thiết lập KPI nhân sự</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs">
+                Content / kịch bản được duyệt
+                <input
+                  type="number"
+                  value={kpis.content}
+                  onChange={(e) =>
+                    setKpis({ ...kpis, content: Number(e.target.value) })
+                  }
+                  className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+                />
+              </label>
+              <label className="text-xs">
+                Creator / video đã đăng
+                <input
+                  type="number"
+                  value={kpis.creator}
+                  onChange={(e) =>
+                    setKpis({ ...kpis, creator: Number(e.target.value) })
+                  }
+                  className="mt-2 h-10 w-full rounded-lg border border-border bg-background px-3"
+                />
+              </label>
+            </div>
+            <button
+              onClick={async () => {
+                await setDoc(
+                  doc(db, "kpis", new Date().toISOString().slice(0, 7)),
+                  { month: new Date().toISOString().slice(0, 7), ...kpis },
+                  { merge: true },
+                );
+              }}
+              className="mt-4 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+            >
+              Lưu KPI tháng
+            </button>
+          </div>
+        </div>
+        <button
+          disabled={saving}
+          onClick={saveSettings}
+          className="mt-5 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+        >
+          {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
+        </button>
+        <section
+          aria-label="Dọn dẹp dữ liệu test"
+          className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
+        >
+          <div className="flex items-start gap-3">
+            <Trash2 className="mt-0.5 size-5 shrink-0 text-red-600" />
+            <div className="min-w-0">
+              <h2 className="font-semibold text-red-900">
+                Dọn dẹp dữ liệu bài viết test
+              </h2>
+              <p className="mt-1 text-xs leading-5 text-red-800">
+                Nút này chỉ xóa ý tưởng, kịch bản, video, bài đăng và thông báo.
+                Cấu hình hệ thống, tài khoản và phân quyền không bị xóa.
+              </p>
+              <button
+                type="button"
+                disabled={cleanupBusy}
+                onClick={cleanupTestData}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+              >
+                {cleanupBusy
+                  ? "Đang dọn dẹp..."
+                  : "Xác nhận dọn dẹp dữ liệu test"}
+              </button>
+              {cleanupToast && (
+                <p
+                  role="status"
+                  className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-900"
+                >
+                  {cleanupToast}
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      </section>
+    );
+  const shown =
+    view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
+      ? archived
+      : view === "Duyệt content"
+        ? [...pendingIdeas, ...pendingScripts]
+        : items;
+  return (
+    <section>
+      <p className="text-xs uppercase tracking-widest text-orange-500">
+        Lead control center
+      </p>
+      <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
+      <div className="my-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Ý tưởng chờ duyệt", pendingIdeas.length, Lightbulb],
+          ["Kịch bản chờ duyệt", pendingScripts.length, Pencil],
+          ["Video chờ duyệt", pendingVideos.length, Film],
+          [
+            "Content đã duyệt",
+            items.filter((i) =>
+              [
+                "scripting",
+                "shooting_pending",
+                "shooting_done",
+                "editing_done",
+                "published",
+              ].includes(i.status),
+            ).length,
+            Check,
+          ],
+          [
+            "Video chưa đăng",
+            items.filter((i) =>
+              ["shooting_pending", "shooting_done", "editing_done"].includes(
+                i.status,
+              ),
+            ).length,
+            Film,
+          ],
+          ["Đã đăng tháng này", published.length, Check],
+          [
+            "Trễ deadline",
+            items.filter(
+              (i) =>
+                i.scheduledAt &&
+                new Date(i.scheduledAt) < new Date() &&
+                i.status !== "published",
+            ).length,
+            AlertTriangle,
+          ],
+        ].map(([label, value, Icon]: any) => (
+          <div
+            key={label}
+            className="min-w-0 rounded-xl border border-border bg-card p-3"
+          >
+            <Icon className="mb-2 size-4 text-orange-500" />
+            <p className="text-xl font-semibold leading-none">{value}</p>
+            <p className="mt-2 text-xs leading-tight text-muted-foreground">
+              {label}
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 rounded-xl border border-border bg-card p-5">
+        <h2 className="font-semibold">KPI Team Media</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          {[
+            ["Content", Math.min(8 / kpis.content, 1), 8, kpis.content],
+            [
+              "Creator",
+              Math.min(published.length / kpis.creator, 1),
+              published.length,
+              kpis.creator,
+            ],
+          ].map(([name, progress, done, target]: any) => (
+            <div key={name}>
+              <div className="flex justify-between text-xs">
+                <span>{name}</span>
+                <span>
+                  {done}/{target}
+                </span>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-accent">
+                <div
+                  className="h-2 rounded-full bg-orange-500"
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6 grid gap-3">
+        {shown.length ? (
+          shown.map((item) => (
+            <article
+              key={item.id}
+              className="rounded-xl border border-border bg-card p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-orange-500">
+                    {statusLabels[item.status]}
+                  </span>
+                  <h2 className="mt-1 font-medium">{item.title}</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.caption || item.description || "Chưa có mô tả."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {item.status === "idea_pending" && (
+                    <>
+                      <button
+                        onClick={() => updateStatus(item, "scripting")}
+                        className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                      >
+                        Duyệt ý tưởng
+                      </button>
+                      <button
+                        onClick={() => updateStatus(item, "archived")}
+                        className="rounded-lg border border-border px-3 py-2 text-xs"
+                      >
+                        Lưu trữ
+                      </button>
+                      <button
+                        onClick={() => setSelected(item)}
+                        className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive"
+                      >
+                        Từ chối
+                      </button>
+                    </>
+                  )}
+                  {item.status === "editing_done" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          updateStatus(item, "published", {
+                            publishedLink: item.publishedLink || "Đã đăng",
+                          })
+                        }
+                        className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                      >
+                        Duyệt video
+                      </button>
+                      <button
+                        onClick={() => setSelected(item)}
+                        className="rounded-lg border border-orange-400 px-3 py-2 text-xs"
+                      >
+                        Yêu cầu sửa
+                      </button>
+                    </>
+                  )}
+                  {item.status === "archived" && (
+                    <button
+                      onClick={() => updateStatus(item, "idea_pending")}
+                      className="rounded-lg border border-border px-3 py-2 text-xs"
+                    >
+                      Kích hoạt lại
+                    </button>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+            Chưa có bài trong luồng này.
+          </div>
+        )}
+      </div>
+      {selected && (
+        <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4">
+          <section className="w-full max-w-md rounded-2xl bg-card p-5">
+            <h2 className="font-semibold">Ph����n hồi Lead</h2>
+            <textarea
+              autoFocus
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="mt-4 min-h-28 w-full rounded-lg border border-border bg-background p-3 text-sm"
+              placeholder="Nhập lý do từ chối hoặc ghi chú sửa..."
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setSelected(null)}
+                className="rounded-lg border border-border px-4 py-2 text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() =>
+                  updateStatus(
+                    selected,
+                    selected.status === "editing_done"
+                      ? "shooting_done"
+                      : "rejected",
+                    { feedback: note, leadNote: note },
+                  )
+                }
+                className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+              >
+                Xác nhận
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
+  );
 }
 
-function DonutKpi({ name, done, target }: { name: string; done: number; target: number }) { const percent = target ? Math.round((done / target) * 100) : 0; const color = percent >= 100 ? '#16a34a' : percent >= 70 ? '#f59e0b' : '#dc2626'; return <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4"><div className="grid size-20 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${color} ${Math.min(percent, 100)}%, hsl(var(--muted)) 0)` }}><div className="grid size-14 place-items-center rounded-full bg-card text-center"><b className="text-sm">{percent}%</b></div></div><div className="min-w-0"><p className="truncate text-sm font-medium">{name}</p><p className="mt-1 text-xs text-muted-foreground">{done}/{target} hoàn thành</p><span className="mt-2 inline-block rounded-full px-2 py-1 text-[10px]" style={{ color, backgroundColor: `${color}18` }}>{percent >= 100 ? 'Đạt/Vượt KPI' : percent >= 70 ? 'Đang tiến hành' : 'Nguy cơ trễ chỉ tiêu'}</span></div></div> }
+function DonutKpi({
+  name,
+  done,
+  target,
+}: {
+  name: string;
+  done: number;
+  target: number;
+}) {
+  const percent = target ? Math.round((done / target) * 100) : 0;
+  const color =
+    percent >= 100 ? "#16a34a" : percent >= 70 ? "#f59e0b" : "#dc2626";
+  return (
+    <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
+      <div
+        className="grid size-20 shrink-0 place-items-center rounded-full"
+        style={{
+          background: `conic-gradient(${color} ${Math.min(percent, 100)}%, hsl(var(--muted)) 0)`,
+        }}
+      >
+        <div className="grid size-14 place-items-center rounded-full bg-card text-center">
+          <b className="text-sm">{percent}%</b>
+        </div>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{name}</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {done}/{target} hoàn thành
+        </p>
+        <span
+          className="mt-2 inline-block rounded-full px-2 py-1 text-[10px]"
+          style={{ color, backgroundColor: `${color}18` }}
+        >
+          {percent >= 100
+            ? "Đạt/Vượt KPI"
+            : percent >= 70
+              ? "Đang tiến hành"
+              : "Nguy cơ trễ chỉ tiêu"}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-function LeadWorkspace({ user, view, openItemId }: { user: User; view: string; openItemId?: string }) {
-  const [items, setItems] = useState<Item[]>(demoItems); const [range, setRange] = useState('7 ngày qua'); useEffect(() => { const overdueItems = items.filter((item) => item.ownerId && item.status !== 'published' && item.scheduledAt && new Date(item.scheduledAt).getTime() < Date.now() && !item.overdueNotifiedAt); if (!overdueItems.length) return; void Promise.all(overdueItems.map(async (item) => { await notifyUser(item.ownerId!, { title: 'Bài đăng đã quá hạn', message: `Bài '${item.title}' đã quá hạn đăng bài. Vui lòng kiểm tra và cập nhật ngay.`, type: 'status_change', linkId: item.id, targetView: 'Lịch Quay & Dựng Video', videoLink: item.finalVideoLink }); await updateDoc(doc(db, 'contentItems', item.id), { overdueNotifiedAt: serverTimestamp() }) })) }, [items]); const [selected, setSelected] = useState<Item | null>(null); const [cleanupBusy, setCleanupBusy] = useState(false); const [cleanupToast, setCleanupToast] = useState(''); const [feedbackTarget, setFeedbackTarget] = useState<{ item: Item; action: 'revision' | 'reject' } | null>(null); const [feedbackText, setFeedbackText] = useState(''); const [toast, setToast] = useState(''); const [settings, setSettings] = useState({ platforms: platformOptions, contentTypes, goals: ['Tăng tương tác', 'Chuyển đổi', 'Branding'], overdueHours: 24 }); const [saving, setSaving] = useState(false)
-  useEffect(() => { const unsub = onSnapshot(collection(db, 'contentItems'), (snap) => setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Item))), () => undefined); const settingsUnsub = onSnapshot(doc(db, 'app_settings', 'workflow'), (snap) => { if (snap.exists()) setSettings((old) => ({ ...old, ...(snap.data() as any) })) }, () => undefined); return () => { unsub(); settingsUnsub() } }, [])
-  useEffect(() => { if (openItemId) { const target = items.find((item) => item.id === openItemId); if (target) setSelected(target) } }, [openItemId, items]); const persist = async (item: Item, patch: Partial<Item>) => { const nextPatch = patch.status === 'approved_idea' && item.status === 'script_pending' ? { ...patch, status: 'script_approved' as Status } : patch; setItems((all) => all.map((x) => x.id === item.id ? { ...x, ...nextPatch } : x)); setSelected(null); try { await setDoc(doc(db, 'contentItems', item.id), nextPatch, { merge: true }); if (item.ownerId && patch.status === 'rejected') await notifyUser(item.ownerId, { title: 'Content/Video bị từ chối', message: `❌ '${item.title}' đã bị t��� chối. Lý do: ${patch.feedback || patch.leadNote || 'Vui lòng xem feedback của Lead.'}`, type: 'feedback', linkId: item.id, targetView: item.status === 'editing_done' || item.status === 'video_pending' ? 'Cần Feedback / Sửa Video' : 'Tất cả Content / Viết Kịch Bản' }); else if (item.ownerId && ['scripting', 'published'].includes(patch.status as string)) await notifyUser(item.ownerId, { title: 'Đã được Lead phê duyệt', message: `🎉 ${item.status === 'editing_done' || item.status === 'video_pending' ? 'Video' : 'Kịch bản'} '${item.title}' của bạn đã được Lead phê duyệt!`, type: 'status_change', linkId: item.id, targetView: item.status === 'editing_done' || item.status === 'video_pending' ? 'Lịch Quay & Dựng Video' : 'Tất cả Content / Viết Kịch Bản' }) } catch (error) { console.error('[v0] Lead update failed:', error) } }
-  const cleanupTestData = async () => { if (cleanupBusy || !window.confirm('Xác nhận xóa toàn bộ ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống và tài khoản sẽ được giữ nguyên.')) return; setCleanupBusy(true); try { const [contentSnap, notificationSnap] = await Promise.all([getDocs(collection(db, 'contentItems')), getDocs(collection(db, 'notifications'))]); await Promise.all([...contentSnap.docs, ...notificationSnap.docs].map((entry) => deleteDoc(entry.ref))); setItems([]); setSelected(null); setCleanupToast('Đã dọn sạch các ý tưởng và bài viết test! Cấu hình hệ thống vẫn giữ nguyên.'); window.setTimeout(() => setCleanupToast(''), 4000) } catch (error) { console.error('[v0] Cleanup failed:', error); setCleanupToast('Không thể dọn dữ liệu. Vui lòng thử lại.') } finally { setCleanupBusy(false) } }; const submitFeedback = async () => { const target = feedbackTarget; const note = feedbackText.trim(); if (!target || !note) return; const patch: Partial<Item> = target.action === 'revision' ? { status: 'needs_revision' as Status, feedback: note, leadNote: note, feedbackUnread: 1 } : { status: 'rejected', feedback: note, leadNote: note, feedbackUnread: 1 }; setItems((all) => all.filter((item) => item.id !== target.item.id)); setFeedbackTarget(null); setFeedbackText(''); setSelected(null); await setDoc(doc(db, 'contentItems', target.item.id), patch, { merge: true }); if (target.item.ownerId) await notifyUser(target.item.ownerId, { title: target.action === 'revision' ? 'Cần chỉnh sửa' : 'Content bị từ chối', message: target.action === 'revision' ? `Lead đã góp ý cho '${target.item.title}': ${note}` : `'${target.item.title}' không được duyệt: ${note}`, type: 'feedback', linkId: target.item.id, targetView: target.action === 'revision' ? 'Cần Feedback / Sửa Video' : 'Tất cả Content / Viết Kịch Bản' }); setToast(target.action === 'revision' ? 'Đã chuyển bài viết vào Kho lưu trữ kèm Góp ý!' : 'Đã từ chối và loại bỏ ý tưởng!'); window.setTimeout(() => setToast(''), 3000) }; const pendingIdeas = items.filter((i) => ['idea_pending', 'pending_approval'].includes(i.status)); const pendingScripts = items.filter((i) => i.status === 'script_pending'); const pendingVideos = items.filter((i) => ['editing_done', 'video_pending'].includes(i.status)); const approvedContent = items.filter((i) => ['approved_idea', 'scripting', 'script_pending', 'script_approved', 'shooting_pending'].includes(i.status)); const unpublishedVideos = items.filter((i) => ['shooting_pending', 'shooting_done', 'editing_done'].includes(i.status)); const archived = items.filter((i) => ['archived', 'needs_revision'].includes(i.status)); const published = items.filter((i) => i.status === 'published'); const overdue = items.filter((i) => i.scheduledAt && new Date(i.scheduledAt).getTime() < Date.now() && i.status !== 'published' && i.status !== 'archived');
-  const cards = view === 'Kho lưu trữ' || view === 'Kho Lưu Trữ' ? archived : view === 'Duyệt content' ? pendingIdeas : view === 'Duyệt video' ? pendingVideos : view === 'Tổng quan' ? items : []
-  if (view === 'Dashboard thống kê') return <section><p className="text-xs uppercase tracking-widest text-orange-500">Analytics & KPI</p><h1 className="mt-1 text-2xl font-semibold">Dashboard thống kê</h1><div className="mt-6 grid gap-4 md:grid-cols-2"><Chart title="Phân bổ k��nh đăng bài" values={settings.platforms.map((name) => [name, items.filter((i) => i.status === 'published' && i.platforms?.includes(name)).length] as [string, number])} /><Chart title="Dạng Content Performance" values={settings.contentTypes.map((name) => [name, items.filter((i) => i.contentType === name).length] as [string, number])} /></div><div className="mt-4 rounded-xl border border-border bg-card p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold">KPI nhân sự tháng này</h2><p className="mt-1 text-xs text-muted-foreground">Realtime theo số content và video đã hoàn thành.</p></div><span className="rounded-full bg-accent px-2 py-1 text-[10px]">{range}</span></div><div className="mt-4 grid gap-4 sm:grid-cols-2"><DonutKpi name="Minh Anh · Content" done={items.filter((i) => ['scripting', 'shooting_pending'].includes(i.status)).length} target={15} /><DonutKpi name="Quốc Bảo · Creator" done={published.length} target={20} /></div></div></section>
-  if (view === 'Cấu hình hệ thống') return <section><p className="text-xs uppercase tracking-widest text-orange-500">Admin settings</p><h1 className="mt-1 text-2xl font-semibold">Cấu hình hệ thống</h1><p className="mt-2 text-sm text-muted-foreground">Cấu hình được đồng bộ realtime lên toàn hệ thống.</p><div className="mt-6 grid gap-4 lg:grid-cols-2"><SettingsBox title="Kênh đăng bài" values={settings.platforms} onChange={(v) => setSettings({ ...settings, platforms: v })} /><SettingsBox title="Dạng Content" values={settings.contentTypes} onChange={(v) => setSettings({ ...settings, contentTypes: v })} /><SettingsBox title="Mục tiêu" values={settings.goals} onChange={(v) => setSettings({ ...settings, goals: v })} /></div><button disabled={saving} onClick={async () => { setSaving(true); await setDoc(doc(db, 'app_settings', 'workflow'), settings, { merge: true }); setSaving(false) }} className="mt-5 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground">{saving ? 'Đang lưu...' : 'Lưu cấu hình realtime'}</button><section aria-label="Dọn dẹp dữ liệu test" className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"><h2 className="font-semibold text-red-900">Dọn dẹp dữ liệu bài viết test</h2><p className="mt-1 text-xs leading-5 text-red-800">Chỉ xóa ý tưởng, kịch bản, video, bài đăng và thông báo. Cấu hình hệ thống và tài khoản vẫn giữ nguyên.</p><button type="button" disabled={cleanupBusy} onClick={cleanupTestData} className="mt-4 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60">{cleanupBusy ? 'Đang dọn dẹp...' : 'Xác nhận dọn dẹp dữ liệu test'}</button>{cleanupToast && <p role="status" className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-900">{cleanupToast}</p>}</section></section>
-  return <><section><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs uppercase tracking-widest text-orange-500">Lead control center</p><h1 className="mt-1 text-2xl font-semibold">{view}</h1><p className="mt-2 text-sm text-muted-foreground">Toàn quyền quản lý pipeline, phê duyệt và điều phối team.</p></div>{view === 'Tổng quan' && <select value={range} onChange={(e) => setRange(e.target.value)} className="h-10 rounded-lg border border-border bg-card px-3 text-xs"><option>Hôm nay</option><option>Hôm qua</option><option>7 ngày qua</option><option>30 ngày qua</option><option>Tháng này</option></select>}</div>{view === 'Tổng quan' && <div className="mt-6 grid max-w-full grid-cols-2 gap-3 overflow-hidden md:grid-cols-3 lg:grid-cols-6">{[['Ý tưởng chờ duyệt', pendingIdeas, Lightbulb], ['Video chờ duyệt', pendingVideos, Film], ['Content đã duyệt', approvedContent, Check], ['Video chưa đăng', unpublishedVideos, Film], ['Video đã đăng', published, Check], ['Trễ deadline', overdue, AlertTriangle]].map(([label, list, Icon]: any) => <button key={label} onClick={() => setSelected({ ...(list[0] || { id: 'empty', title: String(label), status: 'idea_pending' }), __list: list } as any)} className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 text-left transition hover:-translate-y-0.5 hover:border-orange-400"><Icon className="mb-2 size-4 text-orange-500" /><p className="text-xl font-semibold md:text-2xl">{list.length}</p><p className="mt-2 break-words text-xs leading-tight text-muted-foreground md:text-sm">{label}</p></button>)}</div>}<div className="mt-6 grid max-w-full gap-3 overflow-hidden">{cards.length ? cards.map((item) => <article key={item.id} className="max-w-full overflow-hidden rounded-xl border border-border bg-card p-4"><div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0 max-w-full"><span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span><h2 className="mt-1 w-full break-words line-clamp-2 font-medium">{item.title}</h2><p className="mt-1 w-full break-words overflow-hidden text-xs text-muted-foreground">{item.description || item.caption || 'Chưa có mô tả.'}</p><div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground"><span className="rounded-full bg-accent px-2 py-1">{item.contentType || 'Chưa phân loại'}</span><span className="rounded-full bg-accent px-2 py-1">{item.ownerId ? 'Creator/Content' : 'Chưa gán người tạo'}</span><span className="rounded-full bg-accent px-2 py-1">{item.createdAt ? 'Đã gửi' : 'Chưa có ngày gửi'}</span></div></div><button onClick={() => setSelected(item)} className="rounded-lg border border-border px-3 py-2 text-xs">Mở và xử lý</button></div><div className="max-w-xl"><VideoPreview {...primaryVideo(item)} title={item.title} /></div></article>) : view !== 'Tổng quan' && <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">Chưa có nội dung trong khu vực này.</div>}</div>{selected && !(selected as any).__list && <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4"><section className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-6 shadow-xl"><div className="flex items-start justify-between"><div><p className="text-xs text-orange-500">{statusLabels[selected.status]}</p><h2 className="mt-1 text-lg font-semibold">{selected.title}</h2></div><button onClick={() => setSelected(null)} aria-label="Đóng"><X className="size-4" /></button></div><VideoSet item={selected} /><div className="mt-6 flex flex-wrap gap-2">{['idea_pending', 'pending_approval'].includes(selected.status) && <button onClick={() => persist(selected, { status: 'approved_idea', approvedAt: serverTimestamp() })} className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">Duyệt ý tưởng</button>}{['editing_done', 'video_pending'].includes(selected.status) && <button onClick={() => persist(selected, { status: 'ready_to_post', approvedAt: serverTimestamp() })} className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">Duyệt video</button>}<button onClick={() => persist(selected, { status: 'archived' })} className="rounded-lg border border-border px-3 py-2 text-xs">Lưu trữ</button><button onClick={() => persist(selected, { status: 'rejected' })} className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive">Từ chối</button></div></section></div>}{selected && (selected as any).__list && <div className="fixed inset-0 z-20 grid items-end bg-black/40 sm:place-items-center sm:p-4"><section className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-card shadow-xl sm:rounded-2xl"><div className="flex shrink-0 items-center justify-between border-b border-border p-4"><div><p className="text-[10px] uppercase tracking-widest text-orange-500">Lead review queue</p><h2 className="font-semibold">Danh sách cần xử lý</h2></div><button onClick={() => setSelected(null)} aria-label="Đóng" className="rounded-lg border border-border p-2"><X className="size-4" /></button></div><div className="min-h-0 overflow-y-auto p-4"><div className="grid gap-3">{((selected as any).__list as Item[]).map((item) => <article key={item.id} className="rounded-xl border border-border bg-background p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span><h3 className="mt-1 font-medium">{item.title}</h3><div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground"><span className="rounded-full bg-accent px-2 py-1">{item.contentType || 'Ch��a phân loại'}</span><span className="rounded-full bg-accent px-2 py-1">{item.ownerId ? 'Content/Creator' : 'Chưa gán ng��ời tạo'}</span><span className="rounded-full bg-accent px-2 py-1">{item.createdAt ? 'Đã gửi' : 'Chưa có ngày gửi'}</span></div><p className="mt-3 text-xs leading-5 text-muted-foreground">{item.description || item.caption || 'Chưa có tóm tắt kịch bản hoặc Hook 3s.'}</p></div><button onClick={() => setSelected(item)} className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs">Xem toàn bộ kịch bản</button></div><VideoPreview {...primaryVideo(item)} title={item.title} /><div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3"><button onClick={() => { setFeedbackTarget({ item, action: 'revision' }); setFeedbackText('') }} className="rounded-lg border border-border px-3 py-2 text-xs">Tuỳ chỉnh/Góp ý</button><button onClick={() => persist(item, { status: item.status === 'idea_pending' || item.status === 'pending_approval' ? 'approved_idea' : item.status === 'script_pending' ? 'script_approved' : item.status === 'video_pending' || item.status === 'editing_done' ? 'ready_to_post' : 'published', approvedAt: serverTimestamp() })} className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground">Duyệt</button><button onClick={() => persist(item, { status: 'rejected' })} className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive">Từ chối</button></div></article>)}</div></div></section></div>}</section>{feedbackTarget && <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"><section role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-card p-5 shadow-xl"><p className="text-xs uppercase tracking-widest text-orange-500">{feedbackTarget.action === 'revision' ? 'Tuỳ chỉnh / Góp ý' : 'Từ chối content'}</p><h2 className="mt-1 text-lg font-semibold">{feedbackTarget.item.title}</h2><textarea autoFocus required value={feedbackText} onChange={(event) => setFeedbackText(event.target.value)} placeholder="Nhập nhận xét / góp ý / lý do từ chối cho Content..." className="mt-4 min-h-32 w-full resize-y rounded-xl border border-border bg-background p-3 text-sm" /><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => { setFeedbackTarget(null); setFeedbackText('') }} className="rounded-lg border border-border px-4 py-2 text-xs">Hủy</button><button type="button" disabled={!feedbackText.trim()} onClick={() => void submitFeedback()} className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground disabled:opacity-50">Xác nh��n Gửi</button></div></section></div>}{toast && <div role="status" className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-xs text-background shadow-lg">{toast}</div>}</>}
-function Chart({ title, values }: { title: string; values: [string, number][] }) { const max = Math.max(1, ...values.map(([, value]) => value)); return <div className="rounded-xl border border-border bg-card p-5"><h2 className="font-semibold">{title}</h2><div className="mt-5 flex flex-col gap-3">{values.map(([name, value]) => <div key={name}><div className="flex justify-between text-xs"><span>{name}</span><span>{value}</span></div><div className="mt-1 h-2 rounded-full bg-accent"><div className="h-2 rounded-full bg-orange-500" style={{ width: `${(value / max) * 100}%` }} /></div></div>)}</div></div> }
-function KpiRow({ name, done, target }: { name: string; done: number; target: number }) { const percent = Math.round((done / target) * 100); return <div><div className="flex justify-between text-xs"><span>{name}</span><span className={percent < 70 ? 'text-destructive' : 'text-orange-500'}>{done}/{target} · {percent}%</span></div><div className="mt-2 h-2 rounded-full bg-accent"><div className={`h-2 rounded-full ${percent < 70 ? 'bg-destructive' : 'bg-orange-500'}`} style={{ width: `${Math.min(percent, 100)}%` }} /></div></div> }
+function LeadWorkspace({
+  user,
+  view,
+  openItemId,
+}: {
+  user: User;
+  view: string;
+  openItemId?: string;
+}) {
+  const [items, setItems] = useState<Item[]>(demoItems);
+  const [range, setRange] = useState("7 ngày qua");
+  useEffect(() => {
+    const overdueItems = items.filter(
+      (item) =>
+        item.ownerId &&
+        item.status !== "published" &&
+        item.scheduledAt &&
+        new Date(item.scheduledAt).getTime() < Date.now() &&
+        !item.overdueNotifiedAt,
+    );
+    if (!overdueItems.length) return;
+    void Promise.all(
+      overdueItems.map(async (item) => {
+        await notifyUser(item.ownerId!, {
+          title: "Bài đăng đã quá hạn",
+          message: `Bài '${item.title}' đã quá hạn đăng bài. Vui lòng kiểm tra và cập nhật ngay.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Lịch Quay & Dựng Video",
+          videoLink: item.finalVideoLink,
+        });
+        await updateDoc(doc(db, "contentItems", item.id), {
+          overdueNotifiedAt: serverTimestamp(),
+        });
+      }),
+    );
+  }, [items]);
+  const [selected, setSelected] = useState<Item | null>(null);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupToast, setCleanupToast] = useState("");
+  const [feedbackTarget, setFeedbackTarget] = useState<{
+    item: Item;
+    action: "revision" | "reject";
+  } | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [toast, setToast] = useState("");
+  const [settings, setSettings] = useState({
+    platforms: platformOptions,
+    contentTypes,
+    goals: ["Tăng tương tác", "Chuyển đổi", "Branding"],
+    overdueHours: 24,
+  });
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    const unsub = onSnapshot(
+      collection(db, "contentItems"),
+      (snap) =>
+        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Item)),
+      () => undefined,
+    );
+    const settingsUnsub = onSnapshot(
+      doc(db, "app_settings", "workflow"),
+      (snap) => {
+        if (snap.exists())
+          setSettings((old) => ({ ...old, ...(snap.data() as any) }));
+      },
+      () => undefined,
+    );
+    return () => {
+      unsub();
+      settingsUnsub();
+    };
+  }, []);
+  useEffect(() => {
+    if (openItemId) {
+      const target = items.find((item) => item.id === openItemId);
+      if (target) setSelected(target);
+    }
+  }, [openItemId, items]);
+  const persist = async (item: Item, patch: Partial<Item>) => {
+    const nextPatch =
+      patch.status === "approved_idea" && item.status === "script_pending"
+        ? { ...patch, status: "script_approved" as Status }
+        : patch;
+    setItems((all) =>
+      all.map((x) => (x.id === item.id ? { ...x, ...nextPatch } : x)),
+    );
+    setSelected(null);
+    try {
+      await setDoc(doc(db, "contentItems", item.id), nextPatch, {
+        merge: true,
+      });
+      if (item.ownerId && patch.status === "rejected")
+        await notifyUser(item.ownerId, {
+          title: "Content/Video bị từ chối",
+          message: `❌ '${item.title}' đã bị t��� chối. Lý do: ${patch.feedback || patch.leadNote || "Vui lòng xem feedback của Lead."}`,
+          type: "feedback",
+          linkId: item.id,
+          targetView:
+            item.status === "editing_done" || item.status === "video_pending"
+              ? "Cần Feedback / Sửa Video"
+              : "Tất cả Content / Viết Kịch Bản",
+        });
+      else if (
+        item.ownerId &&
+        ["scripting", "published"].includes(patch.status as string)
+      )
+        await notifyUser(item.ownerId, {
+          title: "Đã được Lead phê duyệt",
+          message: `🎉 ${item.status === "editing_done" || item.status === "video_pending" ? "Video" : "Kịch bản"} '${item.title}' của bạn đã được Lead phê duyệt!`,
+          type: "status_change",
+          linkId: item.id,
+          targetView:
+            item.status === "editing_done" || item.status === "video_pending"
+              ? "Lịch Quay & Dựng Video"
+              : "Tất cả Content / Viết Kịch Bản",
+        });
+    } catch (error) {
+      console.error("[v0] Lead update failed:", error);
+    }
+  };
+  const cleanupTestData = async () => {
+    if (
+      cleanupBusy ||
+      !window.confirm(
+        "Xác nhận xóa toàn bộ ý tưởng, kịch bản, video, bài đăng và thông báo test? Cấu hình hệ thống và tài khoản sẽ được giữ nguyên.",
+      )
+    )
+      return;
+    setCleanupBusy(true);
+    try {
+      const [contentSnap, notificationSnap] = await Promise.all([
+        getDocs(collection(db, "contentItems")),
+        getDocs(collection(db, "notifications")),
+      ]);
+      await Promise.all(
+        [...contentSnap.docs, ...notificationSnap.docs].map((entry) =>
+          deleteDoc(entry.ref),
+        ),
+      );
+      setItems([]);
+      setSelected(null);
+      setCleanupToast(
+        "Đã dọn sạch các ý tưởng và bài viết test! Cấu hình hệ thống vẫn giữ nguyên.",
+      );
+      window.setTimeout(() => setCleanupToast(""), 4000);
+    } catch (error) {
+      console.error("[v0] Cleanup failed:", error);
+      setCleanupToast("Không thể dọn dữ liệu. Vui lòng thử lại.");
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+  const submitFeedback = async () => {
+    const target = feedbackTarget;
+    const note = feedbackText.trim();
+    if (!target || !note) return;
+    const patch: Partial<Item> =
+      target.action === "revision"
+        ? {
+            status: "needs_revision" as Status,
+            feedback: note,
+            leadNote: note,
+            feedbackUnread: 1,
+          }
+        : {
+            status: "rejected",
+            feedback: note,
+            leadNote: note,
+            feedbackUnread: 1,
+          };
+    setItems((all) => all.filter((item) => item.id !== target.item.id));
+    setFeedbackTarget(null);
+    setFeedbackText("");
+    setSelected(null);
+    await setDoc(doc(db, "contentItems", target.item.id), patch, {
+      merge: true,
+    });
+    if (target.item.ownerId)
+      await notifyUser(target.item.ownerId, {
+        title:
+          target.action === "revision" ? "Cần chỉnh sửa" : "Content bị từ chối",
+        message:
+          target.action === "revision"
+            ? `Lead đã góp ý cho '${target.item.title}': ${note}`
+            : `'${target.item.title}' không được duyệt: ${note}`,
+        type: "feedback",
+        linkId: target.item.id,
+        targetView:
+          target.action === "revision"
+            ? "Cần Feedback / Sửa Video"
+            : "Tất cả Content / Viết Kịch Bản",
+      });
+    setToast(
+      target.action === "revision"
+        ? "Đã chuyển bài viết vào Kho lưu trữ kèm Góp ý!"
+        : "Đã từ chối và loại bỏ ý tưởng!",
+    );
+    window.setTimeout(() => setToast(""), 3000);
+  };
+  const pendingIdeas = items.filter((i) =>
+    ["idea_pending", "pending_approval"].includes(i.status),
+  );
+  const pendingScripts = items.filter((i) => i.status === "script_pending");
+  const pendingVideos = items.filter((i) =>
+    ["editing_done", "video_pending"].includes(i.status),
+  );
+  const approvedContent = items.filter((i) =>
+    [
+      "approved_idea",
+      "scripting",
+      "script_pending",
+      "script_approved",
+      "shooting_pending",
+    ].includes(i.status),
+  );
+  const unpublishedVideos = items.filter((i) =>
+    ["shooting_pending", "shooting_done", "editing_done"].includes(i.status),
+  );
+  const archived = items.filter((i) =>
+    ["archived", "needs_revision"].includes(i.status),
+  );
+  const published = items.filter((i) => i.status === "published");
+  const overdue = items.filter(
+    (i) =>
+      i.scheduledAt &&
+      new Date(i.scheduledAt).getTime() < Date.now() &&
+      i.status !== "published" &&
+      i.status !== "archived",
+  );
+  const cards =
+    view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
+      ? archived
+      : view === "Duyệt content"
+        ? pendingIdeas
+        : view === "Duyệt video"
+          ? pendingVideos
+          : view === "Tổng quan"
+            ? items
+            : [];
+  if (view === "Dashboard thống kê")
+    return (
+      <section>
+        <p className="text-xs uppercase tracking-widest text-orange-500">
+          Analytics & KPI
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold">Dashboard thống kê</h1>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <Chart
+            title="Phân bổ k��nh đăng bài"
+            values={settings.platforms.map(
+              (name) =>
+                [
+                  name,
+                  items.filter(
+                    (i) =>
+                      i.status === "published" && i.platforms?.includes(name),
+                  ).length,
+                ] as [string, number],
+            )}
+          />
+          <Chart
+            title="Dạng Content Performance"
+            values={settings.contentTypes.map(
+              (name) =>
+                [name, items.filter((i) => i.contentType === name).length] as [
+                  string,
+                  number,
+                ],
+            )}
+          />
+        </div>
+        <div className="mt-4 rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">KPI nhân sự tháng này</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Realtime theo số content và video đã hoàn thành.
+              </p>
+            </div>
+            <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
+              {range}
+            </span>
+          </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <DonutKpi
+              name="Minh Anh · Content"
+              done={
+                items.filter((i) =>
+                  ["scripting", "shooting_pending"].includes(i.status),
+                ).length
+              }
+              target={15}
+            />
+            <DonutKpi
+              name="Quốc Bảo · Creator"
+              done={published.length}
+              target={20}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  if (view === "Cấu hình hệ thống")
+    return (
+      <section>
+        <p className="text-xs uppercase tracking-widest text-orange-500">
+          Admin settings
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold">Cấu hình hệ thống</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Cấu hình được đồng bộ realtime lên toàn hệ thống.
+        </p>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <SettingsBox
+            title="Kênh đăng bài"
+            values={settings.platforms}
+            onChange={(v) => setSettings({ ...settings, platforms: v })}
+          />
+          <SettingsBox
+            title="Dạng Content"
+            values={settings.contentTypes}
+            onChange={(v) => setSettings({ ...settings, contentTypes: v })}
+          />
+          <SettingsBox
+            title="Mục tiêu"
+            values={settings.goals}
+            onChange={(v) => setSettings({ ...settings, goals: v })}
+          />
+        </div>
+        <button
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true);
+            await setDoc(doc(db, "app_settings", "workflow"), settings, {
+              merge: true,
+            });
+            setSaving(false);
+          }}
+          className="mt-5 rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground"
+        >
+          {saving ? "Đang lưu..." : "Lưu cấu hình realtime"}
+        </button>
+        <section
+          aria-label="Dọn dẹp dữ liệu test"
+          className="mt-6 rounded-xl border-2 border-red-300 bg-red-50 p-5"
+        >
+          <h2 className="font-semibold text-red-900">
+            Dọn dẹp dữ liệu bài viết test
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-red-800">
+            Chỉ xóa ý tưởng, kịch bản, video, bài đăng và thông báo. Cấu hình hệ
+            thống và tài khoản vẫn giữ nguyên.
+          </p>
+          <button
+            type="button"
+            disabled={cleanupBusy}
+            onClick={cleanupTestData}
+            className="mt-4 rounded-lg bg-red-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {cleanupBusy ? "Đang dọn dẹp..." : "Xác nhận dọn dẹp dữ liệu test"}
+          </button>
+          {cleanupToast && (
+            <p
+              role="status"
+              className="mt-3 rounded-lg bg-emerald-100 px-3 py-2 text-xs text-emerald-900"
+            >
+              {cleanupToast}
+            </p>
+          )}
+        </section>
+      </section>
+    );
+  return (
+    <>
+      <section>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-orange-500">
+              Lead control center
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Toàn quyền quản lý pipeline, phê duyệt và điều phối team.
+            </p>
+          </div>
+          {view === "Tổng quan" && (
+            <select
+              value={range}
+              onChange={(e) => setRange(e.target.value)}
+              className="h-10 rounded-lg border border-border bg-card px-3 text-xs"
+            >
+              <option>Hôm nay</option>
+              <option>Hôm qua</option>
+              <option>7 ngày qua</option>
+              <option>30 ngày qua</option>
+              <option>Tháng này</option>
+            </select>
+          )}
+        </div>
+        {view === "Tổng quan" && (
+          <div className="mt-6 grid max-w-full grid-cols-2 gap-3 overflow-hidden md:grid-cols-3 lg:grid-cols-6">
+            {[
+              ["Ý tưởng chờ duyệt", pendingIdeas, Lightbulb],
+              ["Video chờ duyệt", pendingVideos, Film],
+              ["Content đã duyệt", approvedContent, Check],
+              ["Video chưa đăng", unpublishedVideos, Film],
+              ["Video đã đăng", published, Check],
+              ["Trễ deadline", overdue, AlertTriangle],
+            ].map(([label, list, Icon]: any) => (
+              <button
+                key={label}
+                onClick={() =>
+                  setSelected({
+                    ...(list[0] || {
+                      id: "empty",
+                      title: String(label),
+                      status: "idea_pending",
+                    }),
+                    __list: list,
+                  } as any)
+                }
+                className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card p-3 text-left transition hover:-translate-y-0.5 hover:border-orange-400"
+              >
+                <Icon className="mb-2 size-4 text-orange-500" />
+                <p className="text-xl font-semibold md:text-2xl">
+                  {list.length}
+                </p>
+                <p className="mt-2 break-words text-xs leading-tight text-muted-foreground md:text-sm">
+                  {label}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="mt-6 grid max-w-full gap-3 overflow-hidden">
+          {cards.length
+            ? cards.map((item) => (
+                <article
+                  key={item.id}
+                  className="max-w-full overflow-hidden rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 max-w-full">
+                      <span className="text-[10px] uppercase tracking-wider text-orange-500">
+                        {statusLabels[item.status]}
+                      </span>
+                      <h2 className="mt-1 w-full break-words line-clamp-2 font-medium">
+                        {item.title}
+                      </h2>
+                      <p className="mt-1 w-full break-words overflow-hidden text-xs text-muted-foreground">
+                        {item.description || item.caption || "Chưa có mô tả."}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                        <span className="rounded-full bg-accent px-2 py-1">
+                          {item.contentType || "Chưa phân loại"}
+                        </span>
+                        <span className="rounded-full bg-accent px-2 py-1">
+                          {item.ownerId
+                            ? "Creator/Content"
+                            : "Chưa gán người tạo"}
+                        </span>
+                        <span className="rounded-full bg-accent px-2 py-1">
+                          {item.createdAt ? "Đã gửi" : "Chưa có ngày gửi"}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSelected(item)}
+                      className="rounded-lg border border-border px-3 py-2 text-xs"
+                    >
+                      Mở và xử lý
+                    </button>
+                  </div>
+                  <div className="max-w-xl">
+                    <VideoPreview {...primaryVideo(item)} title={item.title} />
+                  </div>
+                </article>
+              ))
+            : view !== "Tổng quan" && (
+                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  Chưa có nội dung trong khu vực này.
+                </div>
+              )}
+        </div>
+        {selected && !(selected as any).__list && (
+          <div className="fixed inset-0 z-20 grid place-items-center bg-black/40 p-4">
+            <section className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-card p-6 shadow-xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs text-orange-500">
+                    {statusLabels[selected.status]}
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold">
+                    {selected.title}
+                  </h2>
+                </div>
+                <button onClick={() => setSelected(null)} aria-label="Đóng">
+                  <X className="size-4" />
+                </button>
+              </div>
+              <VideoSet item={selected} />
+              <div className="mt-6 flex flex-wrap gap-2">
+                {["idea_pending", "pending_approval"].includes(
+                  selected.status,
+                ) && (
+                  <button
+                    onClick={() =>
+                      persist(selected, {
+                        status: "approved_idea",
+                        approvedAt: serverTimestamp(),
+                      })
+                    }
+                    className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                  >
+                    Duyệt ý tưởng
+                  </button>
+                )}
+                {["editing_done", "video_pending"].includes(
+                  selected.status,
+                ) && (
+                  <button
+                    onClick={() =>
+                      persist(selected, {
+                        status: "ready_to_post",
+                        approvedAt: serverTimestamp(),
+                      })
+                    }
+                    className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                  >
+                    Duyệt video
+                  </button>
+                )}
+                <button
+                  onClick={() => persist(selected, { status: "archived" })}
+                  className="rounded-lg border border-border px-3 py-2 text-xs"
+                >
+                  Lưu trữ
+                </button>
+                <button
+                  onClick={() => persist(selected, { status: "rejected" })}
+                  className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive"
+                >
+                  Từ chối
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+        {selected && (selected as any).__list && (
+          <div className="fixed inset-0 z-20 grid items-end bg-black/40 sm:place-items-center sm:p-4">
+            <section className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-card shadow-xl sm:rounded-2xl">
+              <div className="flex shrink-0 items-center justify-between border-b border-border p-4">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-orange-500">
+                    Lead review queue
+                  </p>
+                  <h2 className="font-semibold">Danh sách cần xử lý</h2>
+                </div>
+                <button
+                  onClick={() => setSelected(null)}
+                  aria-label="Đóng"
+                  className="rounded-lg border border-border p-2"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="min-h-0 overflow-y-auto p-4">
+                <div className="grid gap-3">
+                  {((selected as any).__list as Item[]).map((item) => (
+                    <article
+                      key={item.id}
+                      className="rounded-xl border border-border bg-background p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider text-orange-500">
+                            {statusLabels[item.status]}
+                          </span>
+                          <h3 className="mt-1 font-medium">{item.title}</h3>
+                          <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+                            <span className="rounded-full bg-accent px-2 py-1">
+                              {item.contentType || "Ch��a phân loại"}
+                            </span>
+                            <span className="rounded-full bg-accent px-2 py-1">
+                              {item.ownerId
+                                ? "Content/Creator"
+                                : "Chưa gán ng��ời tạo"}
+                            </span>
+                            <span className="rounded-full bg-accent px-2 py-1">
+                              {item.createdAt ? "Đã gửi" : "Chưa có ngày gửi"}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                            {item.description ||
+                              item.caption ||
+                              "Chưa có tóm tắt kịch bản hoặc Hook 3s."}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSelected(item)}
+                          className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs"
+                        >
+                          Xem toàn bộ kịch bản
+                        </button>
+                      </div>
+                      <VideoPreview
+                        {...primaryVideo(item)}
+                        title={item.title}
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                        <button
+                          onClick={() => {
+                            setFeedbackTarget({ item, action: "revision" });
+                            setFeedbackText("");
+                          }}
+                          className="rounded-lg border border-border px-3 py-2 text-xs"
+                        >
+                          Tuỳ chỉnh/Góp ý
+                        </button>
+                        <button
+                          onClick={() =>
+                            persist(item, {
+                              status:
+                                item.status === "idea_pending" ||
+                                item.status === "pending_approval"
+                                  ? "approved_idea"
+                                  : item.status === "script_pending"
+                                    ? "script_approved"
+                                    : item.status === "video_pending" ||
+                                        item.status === "editing_done"
+                                      ? "ready_to_post"
+                                      : "published",
+                              approvedAt: serverTimestamp(),
+                            })
+                          }
+                          className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
+                        >
+                          Duyệt
+                        </button>
+                        <button
+                          onClick={() => persist(item, { status: "rejected" })}
+                          className="rounded-lg border border-destructive px-3 py-2 text-xs text-destructive"
+                        >
+                          Từ chối
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
+      {feedbackTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-lg rounded-2xl bg-card p-5 shadow-xl"
+          >
+            <p className="text-xs uppercase tracking-widest text-orange-500">
+              {feedbackTarget.action === "revision"
+                ? "Tuỳ chỉnh / Góp ý"
+                : "Từ chối content"}
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">
+              {feedbackTarget.item.title}
+            </h2>
+            <textarea
+              autoFocus
+              required
+              value={feedbackText}
+              onChange={(event) => setFeedbackText(event.target.value)}
+              placeholder="Nhập nhận xét / góp ý / lý do từ chối cho Content..."
+              className="mt-4 min-h-32 w-full resize-y rounded-xl border border-border bg-background p-3 text-sm"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setFeedbackTarget(null);
+                  setFeedbackText("");
+                }}
+                className="rounded-lg border border-border px-4 py-2 text-xs"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={!feedbackText.trim()}
+                onClick={() => void submitFeedback()}
+                className="rounded-lg bg-primary px-4 py-2 text-xs text-primary-foreground disabled:opacity-50"
+              >
+                Xác nh��n Gửi
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-5 left-1/2 z-[60] -translate-x-1/2 rounded-full bg-foreground px-4 py-2 text-xs text-background shadow-lg"
+        >
+          {toast}
+        </div>
+      )}
+    </>
+  );
+}
+function Chart({
+  title,
+  values,
+}: {
+  title: string;
+  values: [string, number][];
+}) {
+  const max = Math.max(1, ...values.map(([, value]) => value));
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h2 className="font-semibold">{title}</h2>
+      <div className="mt-5 flex flex-col gap-3">
+        {values.map(([name, value]) => (
+          <div key={name}>
+            <div className="flex justify-between text-xs">
+              <span>{name}</span>
+              <span>{value}</span>
+            </div>
+            <div className="mt-1 h-2 rounded-full bg-accent">
+              <div
+                className="h-2 rounded-full bg-orange-500"
+                style={{ width: `${(value / max) * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+function KpiRow({
+  name,
+  done,
+  target,
+}: {
+  name: string;
+  done: number;
+  target: number;
+}) {
+  const percent = Math.round((done / target) * 100);
+  return (
+    <div>
+      <div className="flex justify-between text-xs">
+        <span>{name}</span>
+        <span className={percent < 70 ? "text-destructive" : "text-orange-500"}>
+          {done}/{target} · {percent}%
+        </span>
+      </div>
+      <div className="mt-2 h-2 rounded-full bg-accent">
+        <div
+          className={`h-2 rounded-full ${percent < 70 ? "bg-destructive" : "bg-orange-500"}`}
+          style={{ width: `${Math.min(percent, 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
-function SettingsBox({ title, values, onChange }: { title: string; values: string[]; onChange: (values: string[]) => void }) { const [draft, setDraft] = useState(''); const add = () => { const value = draft.trim(); if (value && !values.includes(value)) { onChange([...values, value]); setDraft('') } }; return <div className="rounded-xl border border-border bg-card p-5"><h2 className="font-medium">{title}</h2><div className="mt-3 flex flex-wrap gap-2">{values.map((value) => <span key={value} className="inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs">{value}<button type="button" aria-label={`Xóa ${value}`} onClick={() => onChange(values.filter((x) => x !== value))} className="ml-2 rounded-full px-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">×</button></span>)}</div><div className="mt-4 flex gap-2"><input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }} className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-xs" placeholder="Thêm danh mục..." /><button type="button" onClick={add} className="rounded-lg border border-border px-3 text-xs">Thêm</button></div></div> }
+function SettingsBox({
+  title,
+  values,
+  onChange,
+}: {
+  title: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const value = draft.trim();
+    if (value && !values.includes(value)) {
+      onChange([...values, value]);
+      setDraft("");
+    }
+  };
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <h2 className="font-medium">{title}</h2>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {values.map((value) => (
+          <span
+            key={value}
+            className="inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs"
+          >
+            {value}
+            <button
+              type="button"
+              aria-label={`Xóa ${value}`}
+              onClick={() => onChange(values.filter((x) => x !== value))}
+              className="ml-2 rounded-full px-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              ×
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+          className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-xs"
+          placeholder="Thêm danh mục..."
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="rounded-lg border border-border px-3 text-xs"
+        >
+          Thêm
+        </button>
+      </div>
+    </div>
+  );
+}
 
-function GenericWorkspace({ role, view }: { role: UserRole; view: string }) { return <><p className="text-xs uppercase tracking-widest text-orange-500">Production workflow</p><h1 className="mt-1 text-2xl font-semibold">{view}</h1><div className="mt-6 grid gap-4 sm:grid-cols-3">{[['Ý tưởng', '12', Lightbulb], ['Đang sản xuất', '6', Film], ['Hoàn thành', '18', Check]].map(([label, value, Icon]: any) => <div key={label} className="rounded-xl border border-border bg-card p-5"><Icon className="mb-5 size-5 text-orange-500" /><p className="text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-muted-foreground">{label}</p></div>)}</div><div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">Khu vực chức năng dành cho {roleLabels[role]} đang sẵn sàng.</div></> }
+function GenericWorkspace({ role, view }: { role: UserRole; view: string }) {
+  return (
+    <>
+      <p className="text-xs uppercase tracking-widest text-orange-500">
+        Production workflow
+      </p>
+      <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
+      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        {[
+          ["Ý tưởng", "12", Lightbulb],
+          ["Đang sản xuất", "6", Film],
+          ["Hoàn thành", "18", Check],
+        ].map(([label, value, Icon]: any) => (
+          <div
+            key={label}
+            className="rounded-xl border border-border bg-card p-5"
+          >
+            <Icon className="mb-5 size-5 text-orange-500" />
+            <p className="text-3xl font-semibold">{value}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+        Khu vực chức năng dành cho {roleLabels[role]} đang sẵn sàng.
+      </div>
+    </>
+  );
+}
