@@ -45,7 +45,7 @@
 
 :root {
   color-scheme: light;
-  --background: #F9F8F6;
+  --background: #F7F7F6;
   --foreground: #18181B;
   --card: #FFFFFF;
   --card-foreground: #18181B;
@@ -107,6 +107,19 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #3f3f46;
   --sidebar-ring: #a1a1aa;
+}
+
+@layer utilities {
+  .dark .bg-white { background-color: #1e1e1e; }
+  .dark .bg-white\/95 { background-color: rgb(18 18 18 / 0.95); }
+  .dark .bg-white\/90 { background-color: rgb(30 30 30 / 0.9); }
+  .dark .bg-stone-100, .dark .bg-zinc-100 { background-color: #27272a; }
+  .dark .bg-amber-50, .dark .bg-orange-50 { background-color: rgb(39 39 42 / 0.8); }
+  .dark .border-stone-200, .dark .border-zinc-200, .dark .border-amber-200 { border-color: #3f3f46; }
+  .dark .text-zinc-900, .dark .text-stone-700, .dark .text-zinc-700 { color: #fafafa; }
+  .dark .text-zinc-600, .dark .text-stone-600, .dark .text-stone-500 { color: #d4d4d8; }
+  .dark .text-zinc-500, .dark .text-stone-400 { color: #a1a1aa; }
+  .dark .hover\\:bg-stone-100:hover, .dark .hover\\:bg-zinc-100:hover { background-color: #27272a; }
 }
 
 @layer base {

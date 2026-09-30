@@ -63,7 +63,9 @@ import {
   Save,
   Send,
   Settings,
+  Moon,
   Sparkles,
+  Sun,
   Trash2,
   UserRound,
   Video,
@@ -362,6 +364,7 @@ export default function Page() {
     );
   if (!user || !role)
     return (
+      <div className={theme === "dark" ? "dark" : ""}>
       <Login
         email={email}
         password={password}
@@ -372,8 +375,9 @@ export default function Page() {
         onLogin={() => login()}
         onDemo={(a: any) => login(a.email, "HappyOrSad@2025")}
       />
+      </div>
     );
-  return <Workspace role={role} user={user} onLogout={() => signOut(auth)} />;
+  return <div className={theme === "dark" ? "dark" : ""}><Workspace role={role} user={user} theme={theme} onThemeChange={setTheme} onLogout={() => signOut(auth)} /></div>;
 }
 
 function Login({
@@ -799,10 +803,14 @@ function GreetingWeatherBanner() {
 function Workspace({
   role,
   user,
+  theme,
+  onThemeChange,
   onLogout,
 }: {
   role: UserRole;
   user: User;
+  theme: "light" | "dark";
+  onThemeChange: (theme: "light" | "dark") => void;
   onLogout: () => void;
 }) {
   const [view, setView] = useState(
@@ -843,7 +851,7 @@ function Workspace({
     );
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors">
-      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-stone-200 bg-white/95 px-4 sm:px-7">
+      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-200 bg-white/95 px-4 sm:px-7 dark:border-zinc-800 dark:bg-zinc-950/95">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -857,6 +865,15 @@ function Workspace({
           <span className="text-sm font-semibold text-zinc-900">{view}</span>
         </div>
         <div className="relative flex items-center gap-3">
+          <button
+            type="button"
+            aria-label={theme === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+            onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
+            className="rounded-lg border border-zinc-300 bg-white p-2 text-zinc-900 shadow-sm transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+          >
+            {theme === "dark" ? <Sun className="size-4" aria-hidden="true" /> : <Moon className="size-4" aria-hidden="true" />}
+          </button>
           <NotificationCenter
   user={user}
   role={role}
