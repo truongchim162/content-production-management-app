@@ -1915,12 +1915,12 @@ function ContentWorkspace({
         </div>
       )}
       {!showForm && (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
           {visible.length ? (
             visible.map((item) => (
               <article
                 key={item.id}
-                className="rounded-xl border border-border bg-card p-4"
+                className="group overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -2079,7 +2079,7 @@ function IdeaVault({
       </div>
       {children}
       {filtered.length ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
           {filtered.map((item) => (
             <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition-shadow hover:shadow-md">
               <div className="relative aspect-[9/16] w-full overflow-hidden bg-zinc-100">
@@ -3260,7 +3260,7 @@ function CreatorWorkspace({
         ))}
       </div>
       {view === "Danh sách bài đăng" ? (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
           {publishedItems.length ? (
             publishedItems.map((item) => (
               <article
@@ -3313,7 +3313,7 @@ function CreatorWorkspace({
           )}
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
           {visible.length ? (
             visible.map((item) => (
               <CreatorCard
@@ -3358,9 +3358,9 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
     item.status !== "published";
   return (
     <article
-      className={`rounded-xl border bg-card p-4 ${overdue ? "border-destructive" : "border-border"}`}
+      className={`group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md ${overdue ? "border-destructive" : "border-border"}`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3 p-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span
@@ -4252,7 +4252,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           ))}
         </div>
       </div>
-      <div className="mt-6 grid gap-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
         {shown.length ? (
           shown.map((item) => (
             <article
@@ -4265,6 +4265,11 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
                     {statusLabels[item.status]}
                   </span>
                   <h2 className="mt-1 font-medium">{item.title}</h2>
+                  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-xl bg-black/5">
+                    <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
+                    <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
+                    <VideoPreview {...primaryVideo(item)} title={item.title} />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {item.caption || item.description || "Chưa có mô tả."}
                   </p>
@@ -4904,7 +4909,13 @@ function LeadWorkspace({
                     </button>
                   </div>
                   <div className="max-w-xl">
-                    <VideoPreview {...primaryVideo(item)} title={item.title} />
+          <div className="relative mt-3 aspect-[9/16] w-full overflow-hidden rounded-t-xl bg-black/5">
+            <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur-md">
+              {item.status === "video_needs_revision" ? "CẦN SỬA" : statusLabels[item.status]}
+            </div>
+            <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
+            <VideoPreview {...primaryVideo(item)} title={item.title} />
+          </div>
                   </div>
                 </article>
               ))
