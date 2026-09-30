@@ -1007,12 +1007,11 @@ function Workspace({
             </span>
           </button>
           {profileOpen && (
-            <ProfileMenu
-              user={user}
-              role={role}
-              onLogout={onLogout}
-              onClose={() => setProfileOpen(false)}
-            />
+<ProfileModal
+  user={user}
+  role={role}
+  onClose={() => setProfileOpen(false)}
+  />
           )}
         </div>
       </header>
@@ -1507,7 +1506,7 @@ function UserManagement({ user, onBack }: { user: User; onBack: () => void }) {
                   placeholder="Nguyễn Văn A"
                 />
                 <Field
-                  label="Email đăng nh��p"
+                  label="Email đ��ng nh��p"
                   value={form.email}
                   onChange={(value) => setForm({ ...form, email: value })}
                   placeholder="content2@happyorsad.vn"
