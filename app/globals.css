@@ -110,6 +110,13 @@
 }
 
 @layer utilities {
+  .text-orange-500, .text-orange-600, .text-orange-700, .text-amber-500, .text-amber-600 { color: #52525b; }
+  .bg-orange-50, .bg-orange-100, .bg-amber-50, .bg-amber-50\/70, .bg-amber-100 { background-color: #f4f4f5; }
+  .border-orange-200, .border-orange-300, .border-orange-400, .border-amber-200, .border-amber-200\/70 { border-color: #d4d4d8; }
+  .hover\\:border-orange-300:hover, .hover\\:border-orange-400:hover, .hover\\:bg-orange-50:hover, .hover\\:bg-stone-100:hover { border-color: #71717a; background-color: #f4f4f5; }
+  .dark .text-orange-500, .dark .text-orange-600, .dark .text-orange-700, .dark .text-amber-500, .dark .text-amber-600 { color: #d4d4d8; }
+  .dark .bg-orange-50, .dark .bg-orange-100, .dark .bg-amber-50, .dark .bg-amber-50\\/70, .dark .bg-amber-100 { background-color: #27272a; }
+  .dark .border-orange-200, .dark .border-orange-300, .dark .border-orange-400, .dark .border-amber-200, .dark .border-amber-200\\/70 { border-color: #52525b; }
   .dark .bg-white { background-color: #1e1e1e; }
   .dark .bg-white\/95 { background-color: rgb(18 18 18 / 0.95); }
   .dark .bg-white\/90 { background-color: rgb(30 30 30 / 0.9); }

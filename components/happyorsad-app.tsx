@@ -313,6 +313,9 @@ export default function Page() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
   useEffect(
     () =>
       onAuthStateChanged(auth, async (current) => {
@@ -391,19 +394,23 @@ function Login({
   onDemo,
 }: any) {
   return (
-    <main className="grid min-h-screen place-items-center bg-background p-5 text-foreground">
-      <section className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#050505] p-5 text-white">
+      <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(to_right,#fff1_1px,transparent_1px),linear-gradient(to_bottom,#fff1_1px,transparent_1px)] [background-size:52px_52px]" aria-hidden="true" />
+      <section className="relative w-full max-w-md border border-white/15 bg-[#111111] p-6 shadow-2xl shadow-black/40 sm:p-9">
+        <div className="mb-10 flex items-center justify-between border-b border-white/10 pb-5">
+          <div>
+            <p className="font-serif text-2xl tracking-[0.28em]">HAPPYORSAD</p>
+            <p className="mt-1 text-[9px] uppercase tracking-[0.35em] text-white/45">Media workspace</p>
+          </div>
+          <div className="grid size-11 place-items-center rounded-full border border-white/20 text-white/80">
             <Clapperboard className="size-5" />
           </div>
-          <b>HAPPYORSAD</b>
         </div>
-        <p className="mb-2 text-xs uppercase tracking-widest text-orange-500">
+        <p className="mb-2 text-[10px] uppercase tracking-[0.3em] text-white/50">
           Welcome back
         </p>
-        <h1 className="text-2xl font-semibold">Đăng nhập workspace</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <h1 className="font-serif text-3xl font-normal tracking-tight">How do you feel today?</h1>
+        <p className="mt-3 text-sm text-white/55">
           Đăng nhập để tiếp tục công việc của bạn.
         </p>
         <form
@@ -416,7 +423,7 @@ function Login({
           <label className="text-xs font-medium">
             Email
             <input
-              className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              className="mt-2 h-11 w-full rounded-none border border-white/15 bg-black/30 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/60"
               type="email"
               required
               value={email}
@@ -426,7 +433,7 @@ function Login({
           <label className="text-xs font-medium">
             Mật khẩu
             <input
-              className="mt-2 h-11 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              className="mt-2 h-11 w-full rounded-none border border-white/15 bg-black/30 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/60"
               type="password"
               required
               value={password}
@@ -443,7 +450,7 @@ function Login({
           )}
           <button
             disabled={busy}
-            className="h-11 rounded-lg bg-primary text-sm font-medium text-primary-foreground"
+            className="h-11 rounded-none bg-white text-sm font-medium text-black transition hover:bg-white/85 disabled:opacity-50"
           >
             {busy ? "Đang đăng nhập..." : "Đăng nhập"}
           </button>
@@ -456,7 +463,7 @@ function Login({
             <button
               key={a.role}
               onClick={() => onDemo(a)}
-              className="flex items-center justify-between rounded-lg border border-border p-3 text-left text-xs hover:border-orange-400"
+              className="flex items-center justify-between rounded-none border border-white/15 p-3 text-left text-xs text-white/80 transition hover:border-white/60 hover:bg-white/5"
             >
               <span>
                 <b>Đăng nhập Demo: {roleLabels[a.role as UserRole]}</b>
@@ -737,7 +744,7 @@ function RoleDrawer({
                   onNavigate(id);
                   onClose();
                 }}
-                className={`flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors ${view === id ? "bg-amber-50 font-semibold text-amber-600" : "text-zinc-700 hover:bg-stone-100"}`}
+                className={`flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition-colors ${view === id ? "bg-zinc-100 font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-white" : "text-zinc-700 hover:bg-stone-100"}`}
               >
                 <Icon aria-hidden="true" />
                 <span>{label}</span>
@@ -861,8 +868,8 @@ function Workspace({
           >
             <Menu aria-hidden="true" />
           </button>
-          <Clapperboard className="size-5 text-orange-500" />
-          <span className="text-sm font-semibold text-zinc-900">{view}</span>
+          <Clapperboard className="size-5 text-zinc-900 dark:text-white" />
+          <span className="text-sm font-semibold text-zinc-900 dark:text-white">{view}</span>
         </div>
         <div className="relative flex items-center gap-3">
           <button
