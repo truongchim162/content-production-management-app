@@ -183,6 +183,7 @@ type NotificationItem = {
   postId?: string;
   ideaId?: string;
   status?: Status;
+  eventKey?: string;
   videoLink?: string;
   isRead: boolean;
   createdAt?: { toDate?: () => Date } | null;
@@ -523,7 +524,7 @@ function NotificationCenter({
 }: {
   user: User;
   role: UserRole;
-  onNavigate: (linkId?: string, targetView?: string) => void;
+  onNavigate: (linkId?: string, targetView?: string, focus?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -568,35 +569,21 @@ function NotificationCenter({
     return unsubscribe;
   }, [user.uid]);
   const visibleItems = items.filter((item) => {
+    if (item.eventKey) {
+      const allowed: Record<UserRole, string[]> = {
+        lead: ["idea_pending", "video_pending_lead", "overdue", "calendar_new"],
+        content: ["idea_approved", "idea_rejected", "script_approved", "script_rejected"],
+        creator: ["script_review_creator", "video_approved", "video_rejected", "publish_due"],
+      };
+      return allowed[role].includes(item.eventKey);
+    }
     const text = `${item.title} ${item.message} ${item.targetView || ""}`.toLowerCase();
-    if (role === "lead") {
-      return (
-        text.includes("content") ||
-        text.includes("ý tưởng") ||
-        text.includes("sửa lại") ||
-        text.includes("video") ||
-        text.includes("creator") ||
-        item.status === "idea_pending" ||
-        item.status === "idea_needs_revision" ||
-        item.status === "video_pending" ||
-        item.targetView === "Duyệt content" ||
-        item.targetView === "Duyệt video"
-      );
-    }
-    if (role === "creator") {
-      return (
-        text.includes("kịch bản") ||
-        text.includes("video") ||
-        text.includes("feedback") ||
-        text.includes("chỉnh sửa") ||
-        text.includes("quá hạn") ||
-        item.status === "script_pending_creator" ||
-        item.status === "video_needs_revision" ||
-        item.targetView === "Duyệt kịch bản" ||
-        item.targetView === "Sân dựng video"
-      );
-    }
-    return true;
+    const legacyByRole: Record<UserRole, RegExp> = {
+      lead: /ý tưởng|video.*duyệt|quá hạn|lịch.*(làm|quay)|calendar/,
+      content: /ý tưởng.*(duyệt|sửa)|kịch bản.*(duyệt|sửa)/,
+      creator: /kịch bản|video.*(duyệt|sửa)|đăng bài|nộp link/,
+    };
+    return legacyByRole[role].test(text);
   });
   const unread = visibleItems.filter((item) => !item.isRead).length;
   useEffect(() => {
@@ -611,7 +598,7 @@ function NotificationCenter({
     if (!item.isRead)
       await updateDoc(doc(db, "notifications", item.id), { isRead: true });
     setOpen(false);
-    onNavigate(item.linkId || item.postId || item.ideaId, item.targetView);
+    onNavigate(item.linkId || item.postId || item.ideaId, item.targetView, item.eventKey);
   };
   const markAll = async () => {
     await Promise.all(
@@ -888,6 +875,15 @@ function Workspace({
   const [openItemId, setOpenItemId] = useState<string>();
   const [profileOpen, setProfileOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notificationFocus, setNotificationFocus] = useState<string>();
+  useEffect(() => {
+    if (!openItemId) return;
+    const timer = window.setTimeout(() => {
+      document.querySelector("[data-detail-form]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (notificationFocus) document.querySelector("[data-feedback-form]")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [openItemId, notificationFocus]);
   const views =
     role === "lead"
       ? [
@@ -943,8 +939,9 @@ function Workspace({
           <NotificationCenter
   user={user}
   role={role}
-  onNavigate={(linkId, targetView) => {
+  onNavigate={(linkId, targetView, focus) => {
               if (linkId) setOpenItemId(linkId);
+              setNotificationFocus(focus);
               setView(
                 targetView ||
                   (role === "creator"
@@ -2122,7 +2119,7 @@ function StageDetailEditor({
     onSave({ ...draft, ...extra, title: draft.title });
   };
   const field = (label: string, key: keyof typeof draft, placeholder = "", editable = !readOnly) => <label className="grid gap-1.5 text-xs font-medium">{label}<input value={draft[key]} disabled={!editable} onChange={(event) => update(key, event.target.value)} placeholder={placeholder} className="h-10 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-70" /></label>;
-  return <div className="fixed inset-0 z-40 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><header className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">{statusLabels[item.status]}</p><h2 className="mt-1 text-xl font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-5" /></button></header>
+  return <div className="fixed inset-0 z-40 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section data-detail-form data-feedback-form={item.status.includes("rejected") || item.status.includes("revision") ? "true" : undefined} className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><header className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">{statusLabels[item.status]}</p><h2 className="mt-1 text-xl font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-5" /></button></header>
     <div className="mt-5 grid gap-4">
       {isIdea && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title", "Tên bài viết")}{field("Dạng Content", "contentType", "Review / Outfit / How-to")}{field("Mục tiêu", "goal", "Tăng tương tác")}{field("Link Ref", "reference", "https://...")}</div>}
       {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
@@ -3464,7 +3461,7 @@ function CreatorWorkspace({
                     </span>
                   ))}
                   <p className="w-full text-xs text-muted-foreground">
-                    Đăng dự kiến:{" "}
+                    Đ��ng dự kiến:{" "}
                     {item.scheduledAt
                       ? new Date(item.scheduledAt).toLocaleString("vi-VN")
                       : "���"}
