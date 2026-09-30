@@ -489,6 +489,7 @@ function NotificationCenter({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [toast, setToast] = useState<NotificationItem | null>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const knownIds = useRef(new Set<string>());
   const initialized = useRef(false);
   useEffect(() => {
@@ -559,6 +560,14 @@ function NotificationCenter({
     return true;
   });
   const unread = visibleItems.filter((item) => !item.isRead).length;
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!notificationRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [open]);
   const markRead = async (item: NotificationItem) => {
     if (!item.isRead)
       await updateDoc(doc(db, "notifications", item.id), { isRead: true });
@@ -576,7 +585,7 @@ function NotificationCenter({
   };
   return (
     <>
-      <div className="relative">
+      <div ref={notificationRef} className="relative">
         <button
           aria-label="Thông báo"
           onClick={() => setOpen((value) => !value)}
@@ -590,7 +599,7 @@ function NotificationCenter({
           )}
         </button>
         {open && (
-          <div className="absolute right-0 top-12 z-40 w-[min(92vw,360px)] rounded-xl border border-border bg-card p-2 shadow-xl">
+          <div className="fixed left-2 right-2 top-16 z-40 max-h-[75vh] overflow-y-auto rounded-2xl border border-stone-200 bg-card p-2 shadow-xl dark:border-zinc-800 sm:absolute sm:left-auto sm:right-0 sm:top-12 sm:w-[380px] sm:max-w-md">
             <div className="flex items-center justify-between px-2 py-2">
               <b className="text-sm">Thông báo</b>
               <button onClick={markAll} className="text-[10px] text-orange-600">
@@ -603,13 +612,13 @@ function NotificationCenter({
                   <button
                     key={item.id}
                     onClick={() => markRead(item)}
-                    className={`block w-full rounded-lg p-3 text-left ${item.isRead ? "opacity-60" : "bg-orange-50"}`}
+                    className={`block w-full cursor-pointer rounded-xl p-2.5 text-left transition-colors hover:bg-stone-50 dark:hover:bg-zinc-800/60 ${item.isRead ? "opacity-60" : "bg-orange-50"}`}
                   >
                     <p className="text-xs font-semibold">{item.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-[11px] leading-snug text-stone-600 dark:text-zinc-400">
                       {item.message}
                     </p>
-                    <time className="mt-2 block text-[10px] text-muted-foreground" dateTime={String(publishedTime(item.createdAt) || "")}>
+                    <time className="mt-1 block text-[10px] text-stone-400" dateTime={String(publishedTime(item.createdAt) || "")}>
                       {relativeTime(item.createdAt)}
                     </time>
                   </button>
