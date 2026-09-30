@@ -1693,27 +1693,11 @@ function ContentWorkspace({
   };
   const contentStats = useMemo(
     () => ({
-      all: items.filter((i) => i.status !== "rejected").length,
-      pending: items.filter((i) =>
-        ["idea_pending", "idea_needs_revision"].includes(i.status),
-      ).length,
-      approved: items.filter((i) =>
-        [
-          "approved_idea",
-          "script_pending",
-          "script_pending_creator",
-          "script_approved",
-          "scripting",
-          "shooting_pending",
-          "shooting_done",
-          "editing_done",
-          "published",
-        ].includes(i.status),
-      ).length,
-      scripting: items.filter((i) =>
-        ["scripting", "approved_idea"].includes(i.status),
-      ).length,
-      archived: items.filter((i) => i.status === "archived").length,
+      all: items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status)).length,
+      pending: items.filter((i) => ["idea_pending", "script_review_creator"].includes(i.status)).length,
+      approved: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
+      scripting: items.filter((i) => ["scripting", "script_rejected"].includes(i.status)).length,
+      archived: items.filter((i) => ["archived", "ready_to_publish", "published"].includes(i.status)).length,
     }),
     [items],
   );
@@ -1721,53 +1705,21 @@ function ContentWorkspace({
     const isArchiveView =
       view === "Kho Lưu Trữ" || contentFilter === "archived";
     const base = isArchiveView
-      ? items.filter((i) => i.status === "archived")
-      : items.filter((i) =>
-          [
-            "idea_pending",
-            "idea_needs_revision",
-            "idea_rejected",
-            "script_rejected",
-            "pending_approval",
-            "approved_idea",
-            "script_pending",
-            "script_approved",
-            "scripting",
-            "shooting_pending",
-            "shooting_done",
-            "editing_done",
-            "published",
-          ].includes(i.status),
-        );
+      ? items.filter((i) => ["archived", "ready_to_publish", "published"].includes(i.status))
+      : items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status));
     const filtered =
       contentFilter === "all" || contentFilter === "archived"
         ? base
         : contentFilter === "pending"
-          ? base.filter((i) =>
-              ["idea_pending", "idea_needs_revision"].includes(i.status),
-            )
+          ? base.filter((i) => ["idea_pending", "script_review_creator"].includes(i.status))
           : contentFilter === "approved"
-            ? base.filter((i) =>
-                [
-                  "approved_idea",
-                  "script_pending",
-                  "script_pending_creator",
-                  "script_approved",
-                  "scripting",
-                  "shooting_pending",
-                  "shooting_done",
-                  "editing_done",
-                  "published",
-                ].includes(i.status),
-              )
-            : base.filter((i) =>
-                ["scripting", "approved_idea"].includes(i.status),
-              );
-    return [...filtered].sort(
-      (a, b) =>
-        (itemTime(b.approvedAt) || itemTime(b.createdAt)) -
-        (itemTime(a.approvedAt) || itemTime(a.createdAt)),
-    );
+            ? base.filter((i) => ["scripting", "script_rejected"].includes(i.status))
+            : base.filter((i) => ["scripting", "script_rejected"].includes(i.status));
+    return [...filtered].sort((a, b) => {
+      const rejectedPriority = (status: Status) => status === "script_rejected" ? 0 : 1;
+      return rejectedPriority(a.status) - rejectedPriority(b.status) ||
+        ((itemTime(b.approvedAt) || itemTime(b.createdAt)) - (itemTime(a.approvedAt) || itemTime(a.createdAt)));
+    });
   }, [items, view, contentFilter]);
   const createIdea = async (data: Omit<Item, "id" | "status">) => {
     setSaving(true);
@@ -1890,7 +1842,7 @@ function ContentWorkspace({
     },
     {
       key: "approved" as const,
-      label: "Tổng ý tưởng được duyệt",
+      label: "Chờ lên kịch bản / Cần sửa KB",
       value: contentStats.approved,
     },
     {
@@ -5192,7 +5144,7 @@ function LeadWorkspace({
           </div>
                   </div>
                   <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                    <button type="button" onClick={() => setSelected(item)} className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">Mở chi tiết</button>
+                    <button type="button" onClick={() => setSelected(item)} className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white">M��� chi tiết</button>
                     {(item.reference || item.finalVideoLink || item.publishedLink) && <a href={item.reference || item.finalVideoLink || item.publishedLink} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-border px-3 py-2 text-xs font-medium">Mở link gốc</a>}
                   </div>
                 </article>
