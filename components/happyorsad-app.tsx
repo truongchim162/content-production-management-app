@@ -241,7 +241,7 @@ const statusLabels: Record<Status, string> = {
   script_pending: "Chờ duyệt kịch bản",
   script_pending_creator: "Creator chờ duyệt kịch bản",
   script_approved: "Chờ quay/dựng",
-  scripting: "Đang viết kịch bản",
+  scripting: "Đã duyệt - Tiến hành viết Kịch bản",
   shooting_pending: "Chờ quay",
   shooting_done: "Đã quay",
   video_pending: "Video chờ duyệt",
@@ -4090,18 +4090,41 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     };
   }, []);
   const updateStatus = async (
-    item: Item,
-    status: Status,
-    extra: Partial<Item> = {},
+  item: Item,
+  status: Status,
+  extra: Partial<Item> = {},
   ) => {
-    const patch = { status, ...extra };
-    setItems((all) =>
-      all.map((x) => (x.id === item.id ? { ...x, ...patch } : x)),
-    );
-    setSelected(null);
-    setNote("");
-    if (!item.id.startsWith("demo-"))
-      await setDoc(doc(db, "contentItems", item.id), patch, { merge: true });
+  const patch = {
+  status,
+  ...extra,
+  ...(status === "scripting" && item.status === "idea_pending"
+  ? { approvedAt: serverTimestamp(), feedbackUnread: 0 }
+  : {}),
+  history: [
+  ...(item.history || []),
+  {
+  action: activityAction(item.status, status),
+  actorName: user.displayName || user.email || "Lead",
+  actorRole: "lead" as UserRole,
+  createdAt: new Date().toISOString(),
+  },
+  ],
+  };
+  setItems((all) =>
+  all.map((x) => (x.id === item.id ? { ...x, ...patch } : x)),
+  );
+  setSelected(null);
+  setNote("");
+  await setDoc(doc(db, "contentItems", item.id), patch, { merge: true });
+  if (status === "scripting" && item.status === "idea_pending" && item.ownerId) {
+  await notifyUser(item.ownerId, {
+  title: "Ý tưởng đã được Lead duyệt",
+  message: `Ý tưởng '${item.title}' đã được duyệt. Vui lòng bắt đầu viết kịch bản.`,
+  type: "status_change",
+  linkId: item.id,
+  targetView: "Tất cả Content / Viết Kịch Bản",
+  });
+  }
   };
   const saveSettings = async () => {
     setSaving(true);
@@ -4772,7 +4795,7 @@ function LeadWorkspace({
     "Ý tưởng chờ duyệt": pendingIdeas,
     "Chờ quay/dựng": items.filter((i) => i.status === "script_approved"),
     "Bài đã duyệt": items.filter((i) => ["video_approved", "editing_done"].includes(i.status)),
-    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_post"),
+    "Bài s��n sàng đăng": items.filter((i) => i.status === "ready_to_post"),
     "Bài đã đăng": published,
     "Trễ deadline": overdue,
   };
