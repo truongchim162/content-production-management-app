@@ -1909,7 +1909,7 @@ function ContentWorkspace({
         </div>
       )}
       {!showForm && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {visible.length ? (
             visible.map((item) => (
               <article
@@ -2096,7 +2096,7 @@ function StageDetailEditor({
       {isIdea && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title", "Tên bài viết")}{field("Dạng Content", "contentType", "Review / Outfit / How-to")}{field("Mục tiêu", "goal", "Tăng tương tác")}{field("Link Ref", "reference", "https://...")}</div>}
       {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
       {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}{field("Góc quay / Hành động", "location", "Mô tả góc máy")}{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
-      {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngoại cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
+      {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngo��i cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isVideoRevision && <div className="grid gap-4"><p className="text-sm font-semibold">Nộp lại bản dựng video</p>{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <SmartVideoPreview url={item.finalVideoLink} />}<label data-feedback-form className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">{role === "lead" ? "Lead Override · Chỉnh sửa nhanh" : "Kiểm tra bắt buộc trước khi đăng"}</p>{role === "lead" && <div className="grid gap-4 sm:grid-cols-2">{field("Caption", "caption", "Nhập caption")}{field("Hashtag", "hashtags", "#hashtag")}</div>}{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledPublishDate", "YYYY-MM-DD HH:mm")}{role !== "lead" && field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
@@ -2170,7 +2170,7 @@ function IdeaVault({
       </div>
       {children}
       {filtered.length ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {filtered.map((item) => (
             <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white text-center shadow-sm transition-shadow hover:shadow-md">
               <div className="relative aspect-[9/16] w-full overflow-hidden bg-zinc-100">
@@ -2836,7 +2836,7 @@ function ScriptEditor({
         no: 1,
         shot: "Mở cảnh toàn thân với outfit hoàn chỉnh",
         angle: "Wide shot ngang hông",
-        voice: "Hôm nay mặc gì để vừa thoải mái vừa nổi bật?",
+        voice: "Hôm nay mặc gì để vừa tho��i mái vừa nổi bật?",
         text: "LOOK OF THE DAY",
       },
       {
@@ -3395,7 +3395,7 @@ function CreatorWorkspace({
         ))}
       </div>
       {view === "Danh sách bài đăng" ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {publishedItems.length ? (
             publishedItems.map((item) => (
               <article
@@ -3448,7 +3448,7 @@ function CreatorWorkspace({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {visible.length ? (
             visible.map((item) => (
               <CreatorCard
@@ -3493,17 +3493,13 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
     item.status !== "published";
   return (
     <article
-      className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${overdue ? "border-destructive" : "border-border"}`}
+      className={`flex h-fit min-w-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-4 text-left shadow-sm ${overdue ? "border-destructive" : ""}`}
     >
-      <div className="flex flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`text-[10px] uppercase tracking-wider ${item.status === "video_needs_revision" ? "text-destructive" : "text-orange-500"}`}
-            >
-              {item.status === "video_needs_revision"
-                ? "CẦN FEEDBACK / CẦN SỬA"
-                : statusLabels[item.status]}
+          <div className="flex items-start justify-between gap-3">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"}`}>
+              {item.status === "video_rejected" || item.status === "video_needs_revision" ? "Cần sửa Video" : statusLabels[item.status]}
             </span>
             {item.status === "video_needs_revision" && item.feedback && (
               <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
@@ -3517,11 +3513,12 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
               </span>
             )}
           </div>
-          <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {item.location || "Chưa có bối cảnh"} ·{" "}
-            {item.outfit || "Chưa có outfit"}
-          </p>
+          <h2 className="mt-1 line-clamp-2 text-[15px] font-bold leading-snug text-foreground">{item.title}</h2>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-1">Bối cảnh: {item.location ? "Đã có" : "Chưa có"}</span>
+            <span className="rounded-full bg-muted px-2 py-1">Outfit: {item.outfit ? "Đã có" : "Chưa có"}</span>
+            <span className="rounded-full bg-muted px-2 py-1">Đạo cụ: {item.shots?.length ? "Đã có" : "Chưa có"}</span>
+          </div>
           <ItemMetadata item={item} />
           {item.status === "published" && (
             <div className="mt-3 rounded-lg bg-stone-50 p-3">
@@ -3547,14 +3544,12 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
               </div>
             </div>
           )}
-          <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          <div className="relative mt-1 w-full overflow-hidden rounded-xl">
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">{primaryVideo(item).url ? "MEDIA" : "REF"}</span>
+            <div className="max-h-[360px] aspect-[9/16] w-full overflow-hidden rounded-xl bg-muted"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          </div>
         </div>
-        <button
-          onClick={onOpen}
-          className="absolute right-4 top-4 rounded-lg border border-stone-300 px-3 py-1 text-xs font-medium transition-colors hover:bg-stone-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          Mở bài
-        </button>
+        <button type="button" onClick={onOpen} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">Mở kịch bản</button>
       </div>
       {item.scheduledAt && (
         <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -3562,7 +3557,9 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
           Đăng dự kiến: {new Date(item.scheduledAt).toLocaleString("vi-VN")}
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 grid gap-2 border-t border-border pt-3">
+        <button type="button" onClick={onOpen} className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Nộp Video Bản Dựng / Mở bài</button>
+        <div className="flex flex-wrap gap-2">
         <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
           {item.shots?.length || 0} shots
         </span>
@@ -3574,6 +3571,7 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
             {p}
           </span>
         ))}
+        </div>
       </div>
     </article>
   );
@@ -5040,7 +5038,10 @@ function LeadWorkspace({
               {item.status === "video_needs_revision" ? "CẦN SỬA" : statusLabels[item.status]}
             </div>
             <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
-            <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+<div className="relative mt-1 w-full overflow-hidden rounded-xl">
+            <div className="absolute left-2 top-2 z-10 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">{primaryVideo(item).url ? "MEDIA" : "REF"}</div>
+            <div className="max-h-[360px] aspect-[9/16] w-full overflow-hidden rounded-xl bg-muted"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          </div>
           </div>
                   </div>
                 </article>
