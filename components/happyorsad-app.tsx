@@ -3127,7 +3127,9 @@ function CreatorWorkspace({
   const [items, setItems] = useState<Item[]>(
     demoItems.filter((item) =>
       [
+        "script_review_creator",
         "script_pending_creator",
+        "waiting_production",
         "script_approved",
         "shooting_pending",
         "shooting_done",
@@ -3171,8 +3173,11 @@ function CreatorWorkspace({
                 !["archived", "rejected"].includes(item.status) &&
                 (item.ownerId === user.uid ||
                   [
+                    "script_review_creator",
                     "script_pending_creator",
+                    "waiting_production",
                     "script_approved",
+                    "video_pending_lead",
                     "video_pending",
                     "video_needs_revision",
                     "ready_to_post",
@@ -3183,7 +3188,7 @@ function CreatorWorkspace({
       },
       () => undefined,
     );
-  }, []);
+  }, [user.uid]);
   const update = async (item: Item, patch: Partial<Item>) => {
     const isPublishing = patch.status === "published";
     const nextPatch =
@@ -3309,7 +3314,7 @@ function CreatorWorkspace({
   const creatorPriority = (item: Item) => ["script_review_creator", "script_pending_creator", "script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
   const visible =
     creatorFilter === "script"
-      ? items.filter((item) => ["script_review_creator", "script_pending_creator"].includes(item.status))
+      ? items.filter((item) => ["script_review_creator", "script_pending_creator", "approved_idea"].includes(item.status))
       : creatorFilter === "shoot"
         ? items.filter((item) => ["waiting_production", "script_approved"].includes(item.status))
       : creatorFilter === "video"
