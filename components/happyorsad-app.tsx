@@ -3060,7 +3060,7 @@ function WorkSchedule({ user, isLead = false }: { user: User; isLead?: boolean }
         <div className="rounded-2xl border bg-card p-3 sm:p-5"><div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground">{["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => <span key={day} className="p-2">{day}</span>)}</div><div className="grid grid-cols-7 gap-1">{Array.from({ length: firstDay }).map((_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: days }, (_, index) => { const day = index + 1; const dateKey = keyFor(day); const entry = entries[dateKey]; const config = entry && scheduleTypes[entry.type]; return <button type="button" key={dateKey} onClick={() => { setSelectedDate(dateKey); if (entry) { setType(entry.type); setShift(entry.shift); setLocation(entry.location || ""); setOutfit(entry.outfit || ""); } }} className={`relative min-h-20 rounded-xl border p-2 text-left transition hover:border-zinc-900 ${dateKey === todayKey ? "ring-2 ring-zinc-900" : ""} ${entry?.checkedIn ? "border-emerald-700 ring-2 ring-emerald-300" : "border-border"}`}><span className="text-sm font-semibold">{day}</span>{entry && <span className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${entry.type === "onsite" ? "text-zinc-900" : "text-muted-foreground"}`}><i className={`size-2 rounded-full ${config?.color}`} />{config?.icon} <span className="hidden sm:inline">{config?.label}</span></span>}{entry?.checkedIn && <CheckCircle2 className="absolute right-1 top-1 size-4 text-emerald-600" aria-label="Đã chấm công" />}</button>})}</div></div>
         <aside className="rounded-2xl border bg-card p-4"><h2 className="font-semibold">Trạng thái</h2><div className="mt-4 space-y-3">{Object.entries(scheduleTypes).map(([key, config]) => <div key={key} className="flex items-center gap-2 text-sm"><i className={`size-3 rounded-full ${config.color}`} />{config.icon} {config.label}</div>)}<p className="pt-2 text-xs text-muted-foreground">Viền xanh và dấu tick là ngày đã chấm công thực tế.</p></div></aside>
       </div>
-      {selectedDate && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Ngày đăng ký</p><h2 className="text-xl font-semibold">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString("vi-VN")}</h2></div><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-3 py-1">×</button></div><div className="mt-5 grid grid-cols-2 gap-2">{Object.entries(scheduleTypes).map(([key, config]) => <button type="button" key={key} onClick={() => setType(key as ScheduleType)} className={`rounded-xl border p-3 text-left text-sm ${type === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}><span className="mr-2">{config.icon}</span>{config.label}</button>)}</div><div className="mt-4"><label className="text-sm font-medium">Ca làm</label><div className="mt-2 grid grid-cols-3 gap-2">{[["morning", "Ca sáng"], ["afternoon", "Ca chiều"], ["full", "Cả ngày"]].map(([key, label]) => <button type="button" key={key} onClick={() => setShift(key as ScheduleEntry["shift"])} className={`rounded-lg border px-2 py-2 text-xs ${shift === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}>{label}</button>)}</div></div>{type === "onsite" && <div className="mt-4 grid gap-3"><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Địa điểm quay" className="rounded-lg border bg-background px-3 py-2 text-sm" /><input value={outfit} onChange={(event) => setOutfit(event.target.value)} placeholder="Bộ sưu tập / Outfit" className="rounded-lg border bg-background px-3 py-2 text-sm" /></div>}<div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button>{selectedDate === todayKey && <button type="button" onClick={checkIn} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm text-emerald-700">Chấm công hôm nay</button>}<button type="button" onClick={saveEntry} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu đăng ký</button></div></div></div>}
+      {selectedDate && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Ngày đăng ký</p><h2 className="text-xl font-semibold">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString("vi-VN")}</h2></div><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-3 py-1">×</button></div><div className="mt-5 grid grid-cols-2 gap-2">{Object.entries(scheduleTypes).map(([key, config]) => <button type="button" key={key} onClick={() => setType(key as ScheduleType)} className={`rounded-xl border p-3 text-left text-sm ${type === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}><span className="mr-2">{config.icon}</span>{config.label}</button>)}</div><div className="mt-4"><label className="text-sm font-medium">Ca làm</label><div className="mt-2 grid grid-cols-3 gap-2">{[["morning", "Ca sáng"], ["afternoon", "Ca chiều"], ["full", "Cả ngày"]].map(([key, label]) => <button type="button" key={key} onClick={() => setShift(key as ScheduleEntry["shift"])} className={`rounded-lg border px-2 py-2 text-xs ${shift === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}>{label}</button>)}</div></div>{type === "onsite" && <div className="mt-4 grid gap-3"><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Địa điểm quay" className="rounded-lg border bg-background px-3 py-2 text-sm" /><input value={outfit} onChange={(event) => setOutfit(event.target.value)} placeholder="Bộ sưu tập / Outfit" className="rounded-lg border bg-background px-3 py-2 text-sm" /></div>}<div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button>{selectedDate === todayKey && <button type="button" onClick={checkIn} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm text-emerald-700">Ch��m công hôm nay</button>}<button type="button" onClick={saveEntry} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu đăng ký</button></div></div></div>}
     </section>
   );
 }
@@ -4659,9 +4659,18 @@ function LeadWorkspace({
     );
     setSelected(null);
     try {
-      await setDoc(doc(db, "contentItems", item.id), patchWithHistory, {
-        merge: true,
-      });
+      const itemRef = doc(db, "contentItems", item.id);
+      await setDoc(itemRef, patchWithHistory, { merge: true });
+      const saved = await getDoc(itemRef);
+      const savedStatus = saved.exists() ? (saved.data().status as Status) : undefined;
+      if (savedStatus !== nextPatch.status) {
+        throw new Error(`Trạng thái chưa được lưu: ${savedStatus || "không có"}`);
+      }
+      setItems((all) =>
+        all.map((current) =>
+          current.id === item.id ? { ...current, ...saved.data() } as Item : current,
+        ),
+      );
       if (item.ownerId && patch.status === "rejected")
         await notifyUser(item.ownerId, {
           title: "Content/Video bị từ chối",
@@ -4689,6 +4698,8 @@ function LeadWorkspace({
         });
     } catch (error) {
       console.error("[v0] Lead update failed:", error);
+      setToast(error instanceof Error ? error.message : "Không thể lưu trạng thái bài viết. Vui lòng thử lại.");
+      setItems((all) => all.map((current) => current.id === item.id ? item : current));
     }
   };
   const cleanupTestData = async () => {
