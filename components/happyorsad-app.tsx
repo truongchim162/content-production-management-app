@@ -3290,30 +3290,34 @@ function CreatorWorkspace({
   });
   const allCreatorItems = items.filter((item) =>
     [
+      "script_review_creator",
       "script_pending_creator",
+      "waiting_production",
       "script_approved",
       "shooting_pending",
       "shooting_done",
       "editing_done",
+      "video_pending_lead",
       "video_pending",
       "needs_revision",
       "script_rejected",
       "video_rejected",
+      "ready_to_publish",
       "ready_to_post",
     ].includes(item.status),
   );
-  const creatorPriority = (item: Item) => ["script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
+  const creatorPriority = (item: Item) => ["script_review_creator", "script_pending_creator", "script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
   const visible =
     creatorFilter === "script"
-      ? items.filter((item) => item.status === "script_pending_creator")
+      ? items.filter((item) => ["script_review_creator", "script_pending_creator"].includes(item.status))
       : creatorFilter === "shoot"
-        ? items.filter((item) => item.status === "script_approved")
-        : creatorFilter === "video"
-          ? items.filter((item) => item.status === "video_pending")
-          : creatorFilter === "revision"
-            ? items.filter((item) => item.status === "video_needs_revision")
-            : creatorFilter === "ready"
-              ? items.filter((item) => item.status === "ready_to_post")
+        ? items.filter((item) => ["waiting_production", "script_approved"].includes(item.status))
+      : creatorFilter === "video"
+        ? items.filter((item) => ["video_pending_lead", "video_pending"].includes(item.status))
+      : creatorFilter === "revision"
+        ? items.filter((item) => ["video_rejected", "video_needs_revision", "script_rejected", "needs_revision"].includes(item.status))
+      : creatorFilter === "ready"
+        ? items.filter((item) => ["ready_to_publish", "ready_to_post"].includes(item.status))
               : creatorFilter === "published"
                 ? filteredPublishedItems
                 : creatorFilter === "overdue"
