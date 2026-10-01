@@ -1914,14 +1914,15 @@ function ContentWorkspace({
             visible.map((item) => (
               <article
                 key={item.id}
-                className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/50 bg-card p-4 text-left shadow-sm"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${item.status === "idea_rejected" || item.status === "idea_needs_revision" ? "bg-amber-100 text-amber-800" : item.status === "script_rejected" || item.status === "needs_revision" ? "bg-orange-100 text-orange-800" : item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-50 text-orange-600"}`}>
                       {statusLabels[item.status]}
                     </span>
-                    <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+<h2 className="mt-2 line-clamp-2 text-left text-[15px] font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.description || "Chưa có mô tả."}
                     </p>
@@ -1956,15 +1957,16 @@ function ContentWorkspace({
                         title={item.title}
                       />
                     )}
-                  </div>
-                  <button
+                    </div>
+                    <button
                     onClick={() => setSelected(item)}
                     className="rounded-lg border border-border px-3 py-2 text-xs"
                   >
                     Mở chi tiết
                   </button>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                   {item.contentType && (
                     <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
                       {item.contentType}
@@ -1983,7 +1985,7 @@ function ContentWorkspace({
             ))
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              Chưa có nội dung �� trạng thái này.
+              Chưa có nội dung ở trạng thái này.
             </div>
           )}
         </div>
@@ -2302,7 +2304,7 @@ function VideoPreview({
         ? `https://www.tiktok.com/player/v1/${tiktokId}`
         : value;
   const player = (
-    <div className="mx-auto w-full aspect-[9/16] overflow-hidden rounded-xl border border-stone-200 bg-black/5 shadow-md dark:border-zinc-700">
+    <div className="mx-auto aspect-[9/16] max-h-[380px] w-full overflow-hidden rounded-xl bg-black/5">
       {isDirect ? (
         <video
           controls
@@ -2327,25 +2329,15 @@ function VideoPreview({
     </span>
   );
   return (
-    <div className="mx-auto my-3 flex w-full max-w-[340px] flex-col items-center justify-center rounded-2xl border border-stone-200/60 bg-stone-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
-      <div className="mb-2 flex w-full items-center justify-between gap-2 text-xs">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          {badge}
-          {title && (
-            <span
-              className="min-w-0 truncate font-medium text-foreground"
-              title={title}
-            >
-              {title}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 gap-2">
+    <div className="relative mt-3 w-full overflow-hidden rounded-xl">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-center justify-between gap-2 text-xs">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{badge}</div>
+        <div className="pointer-events-auto flex shrink-0 gap-2">
           <a
             href={value}
             target="_blank"
             rel="noreferrer"
-            className="rounded-md border border-border bg-card px-2 py-1"
+            className="rounded-full border border-white/20 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md"
           >
             Mở link gốc
           </a>
