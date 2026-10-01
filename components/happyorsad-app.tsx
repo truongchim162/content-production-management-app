@@ -4366,31 +4366,31 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
           ))}
         </div>
       </div>
-      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="mt-6 grid w-full grid-cols-1 gap-6 md:grid-cols-2">
         {shown.length ? (
           shown.map((item) => (
             <article
               key={item.id}
-              className="rounded-xl border border-border bg-card p-4"
+              className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm"
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+              <div className="flex min-w-0 flex-col gap-3">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <span className="text-[10px] uppercase tracking-wider text-orange-500">{statusLabels[item.status]}</span>
                     {isPastPublishDeadline(item) && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">Trễ deadline</span>}
                   </div>
                   <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-                  <div className="relative mb-3 aspect-[9/16] w-full overflow-hidden rounded-t-lg bg-black/5">
-                    <div className="absolute left-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">{statusLabels[item.status]}</div>
-                    <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
-                    <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+                  <div className="relative mb-1 aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black/5">
+                    <div className="absolute left-2 top-2 z-10 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">{statusLabels[item.status]}</div>
+                    <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">Mở chi tiết</button>
+                    <div className="size-full"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {item.caption || item.description || "Chưa có mô tả."}
                   </p>
                   <ItemMetadata item={item} />
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   {item.status === "idea_pending" && (
                     <>
                       <button
