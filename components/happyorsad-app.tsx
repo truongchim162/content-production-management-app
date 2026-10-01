@@ -265,7 +265,7 @@ const statusLabels: Record<Status, string> = {
   video_needs_revision: "Video cần sửa",
   video_resubmission: "Nộp lại video",
   script_pending: "Chờ duyệt kịch bản",
-  script_pending_creator: "Creator chờ duyệt kịch bản",
+  script_pending_creator: "Kịch bản chờ Creator duyệt",
   script_approved: "Chờ quay/dựng",
   scripting: "Đã duyệt - Tiến hành viết Kịch bản",
   shooting_pending: "Chờ quay",
