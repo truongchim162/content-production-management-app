@@ -706,15 +706,9 @@ function RoleDrawer({
     role === "lead"
       ? [
           ["Tổng quan", LayoutDashboard, "Tổng quan Lead Control Center"],
-          ["Dashboard thống kê", BarChart3, "Dashboard thống kê & KPI"],
-          ["Duyệt content", FileCheck2, "Duyệt Ý tưởng / Content"],
+                  ["Duyệt content", FileCheck2, "Duyệt Ý tưởng / Content"],
           ["Duyệt video", Video, "Duyệt Video"],
-          ["Ý tưởng chờ duyệt", Lightbulb, "Ý tưởng chờ duyệt"],
-          ["Chờ quay/dựng", Video, "Chờ quay/dựng"],
-          ["Bài đã duyệt", CheckCircle2, "Bài đã duyệt"],
-          ["Bài sẵn sàng đăng", Send, "Bài sẵn sàng đăng"],
-          ["Bài đã đăng", CheckSquare, "Bài đã đăng"],
-          ["Trễ deadline", AlertCircle, "Trễ deadline"],
+
   ["Kho lưu trữ", Archive, "Kho lưu trữ"],
   ["Quản lý Thùng Rác", Trash2, "Quản lý Thùng Rác"],
   ["Báo cáo & Hiệu suất KPI", BarChart3, "Báo cáo & Hiệu suất KPI"],
@@ -734,8 +728,7 @@ function RoleDrawer({
             ],
             ["Kho Lưu Trữ", Archive, "Kho Lưu Trữ Ý Tưởng"],
             ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
-            ["Feedback & Trao Đổi", MessageCircle, "Feedback & Yêu cầu sửa"],
-          ]
+                    ]
         : ([
             [
               "Lịch Quay & Dựng Video",
@@ -892,12 +885,10 @@ function Workspace({
     role === "lead"
       ? [
           "Tổng quan",
-          "Dashboard thống kê",
-          "Duyệt content",
+                  "Duyệt content",
           "Duyệt video",
           "Kho lưu trữ",
-          "Viết kịch bản chi tiết",
-          "Lịch làm việc",
+                  "Lịch làm việc",
           "Lịch quay & dựng",
           "Sân dựng video",
           "Cấu hình hệ thống",
@@ -1668,27 +1659,11 @@ function ContentWorkspace({
   };
   const contentStats = useMemo(
     () => ({
-      all: items.filter((i) => i.status !== "rejected").length,
-      pending: items.filter((i) =>
-        ["idea_pending", "idea_needs_revision"].includes(i.status),
-      ).length,
-      approved: items.filter((i) =>
-        [
-          "approved_idea",
-          "script_pending",
-          "script_pending_creator",
-          "script_approved",
-          "scripting",
-          "shooting_pending",
-          "shooting_done",
-          "editing_done",
-          "published",
-        ].includes(i.status),
-      ).length,
-      scripting: items.filter((i) =>
-        ["scripting", "approved_idea"].includes(i.status),
-      ).length,
-      archived: items.filter((i) => i.status === "archived").length,
+      all: items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status)).length,
+      pending: items.filter((i) => i.status === "idea_pending").length,
+      scripting: items.filter((i) => ["scripting", "script_rejected", "idea_rejected"].includes(i.status)).length,
+      creator: items.filter((i) => i.status === "script_review_creator").length,
+      archived: items.filter((i) => i.status === "published").length,
     }),
     [items],
   );
@@ -1696,51 +1671,22 @@ function ContentWorkspace({
     const isArchiveView =
       view === "Kho Lưu Trữ" || contentFilter === "archived";
     const base = isArchiveView
-      ? items.filter((i) => i.status === "archived")
-      : items.filter((i) =>
-          [
-            "idea_pending",
-            "idea_needs_revision",
-            "pending_approval",
-            "approved_idea",
-            "script_pending",
-            "script_approved",
-            "scripting",
-            "shooting_pending",
-            "shooting_done",
-            "editing_done",
-            "published",
-          ].includes(i.status),
-        );
+      ? items.filter((i) => i.status === "published")
+      : items.filter((i) => ["idea_pending", "scripting", "script_rejected", "script_review_creator"].includes(i.status));
     const filtered =
       contentFilter === "all" || contentFilter === "archived"
         ? base
         : contentFilter === "pending"
-          ? base.filter((i) =>
-              ["idea_pending", "idea_needs_revision"].includes(i.status),
-            )
+          ? base.filter((i) => i.status === "idea_pending")
           : contentFilter === "approved"
-            ? base.filter((i) =>
-                [
-                  "approved_idea",
-                  "script_pending",
-                  "script_pending_creator",
-                  "script_approved",
-                  "scripting",
-                  "shooting_pending",
-                  "shooting_done",
-                  "editing_done",
-                  "published",
-                ].includes(i.status),
-              )
-            : base.filter((i) =>
-                ["scripting", "approved_idea"].includes(i.status),
-              );
-    return [...filtered].sort(
-      (a, b) =>
-        (itemTime(b.approvedAt) || itemTime(b.createdAt)) -
-        (itemTime(a.approvedAt) || itemTime(a.createdAt)),
-    );
+            ? base.filter((i) => ["scripting", "script_rejected", "idea_rejected"].includes(i.status))
+            : contentFilter === "creator"
+              ? base.filter((i) => i.status === "script_review_creator")
+              : base.filter((i) => ["scripting", "script_rejected", "idea_rejected"].includes(i.status));
+    return [...filtered].sort((a, b) => {
+      const priority = (status: Status) => ["script_rejected", "idea_rejected"].includes(status) ? 0 : 1;
+      return priority(a.status) - priority(b.status) || (itemTime(b.approvedAt) || itemTime(b.createdAt)) - (itemTime(a.approvedAt) || itemTime(a.createdAt));
+    });
   }, [items, view, contentFilter]);
   const createIdea = async (data: Omit<Item, "id" | "status">) => {
     setSaving(true);
@@ -1856,26 +1802,10 @@ function ContentWorkspace({
       await deleteDoc(doc(db, "contentItems", item.id));
   };
   const statCards = [
-    {
-      key: "pending" as const,
-      label: "Chờ duyệt",
-      value: contentStats.pending,
-    },
-    {
-      key: "approved" as const,
-      label: "Tổng ý tưởng được duyệt",
-      value: contentStats.approved,
-    },
-    {
-      key: "scripting" as const,
-      label: "Chờ lên kịch bản",
-      value: contentStats.scripting,
-    },
-    {
-      key: "archived" as const,
-      label: "Kho lưu trữ",
-      value: contentStats.archived,
-    },
+    { key: "pending" as const, label: "CHỜ LEAD DUYỆT YT", value: contentStats.pending },
+    { key: "scripting" as const, label: "CẦN VIẾT / SỬA KỊCH BẢN", value: contentStats.scripting },
+    { key: "creator" as const, label: "KỊCH BẢN CHỜ CREATOR DUYỆT", value: contentStats.creator },
+    { key: "archived" as const, label: "KHO LƯU TRỮ BÀI ĐÃ ĐĂNG", value: contentStats.archived },
   ];
   const formatDate = (value: unknown) => {
     const timestamp = itemTime(value);
@@ -4372,10 +4302,14 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     );
   const shown =
     view === "Kho lưu trữ" || view === "Kho Lưu Trữ"
-      ? archived
-      : view === "Duyệt content"
-        ? [...pendingIdeas, ...pendingScripts]
-        : items;
+      ? items.filter((item) => item.status === "published")
+      : view === "Quản lý Thùng Rác"
+        ? items.filter((item) => item.status === "archived")
+        : view === "Duyệt content"
+          ? pendingIdeas
+          : view === "Duyệt video"
+            ? pendingVideos
+            : items.filter((item) => ["idea_pending", "video_pending_lead"].includes(item.status));
   return (
     <section>
       <p className="text-xs uppercase tracking-widest text-orange-500">
@@ -4384,42 +4318,12 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
       <h1 className="mt-1 text-2xl font-semibold">{view}</h1>
       <div className="my-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {[
-          ["Ý tưởng chờ duyệt", pendingIdeas.length, Lightbulb],
-          ["Kịch bản chờ duyệt", pendingScripts.length, Pencil],
-          ["Video chờ duyệt", pendingVideos.length, Film],
-          [
-            "Content đã duyệt",
-            items.filter((i) =>
-              [
-                "scripting",
-                "shooting_pending",
-                "shooting_done",
-                "editing_done",
-                "published",
-              ].includes(i.status),
-            ).length,
-            Check,
-          ],
-          [
-            "Video chưa đăng",
-            items.filter((i) =>
-              ["shooting_pending", "shooting_done", "editing_done"].includes(
-                i.status,
-              ),
-            ).length,
-            Film,
-          ],
-          ["Đã đăng tháng này", published.length, Check],
-          [
-            "Tr�� deadline",
-            items.filter(
-              (i) =>
-                i.scheduledAt &&
-                new Date(i.scheduledAt) < new Date() &&
-                i.status !== "published",
-            ).length,
-            AlertTriangle,
-          ],
+          ["Ý tưởng chờ duyệt", items.filter((i) => i.status === "idea_pending").length, Lightbulb],
+          ["Video chờ duyệt", items.filter((i) => i.status === "video_pending_lead").length, Film],
+          ["Content đang làm", items.filter((i) => ["scripting", "script_review_creator", "waiting_production"].includes(i.status)).length, Pencil],
+          ["Sẵn sàng đăng", items.filter((i) => i.status === "ready_to_publish").length, Send],
+          ["Video đã đăng", items.filter((i) => i.status === "published").length, Check],
+          ["Trễ deadline", items.filter((i) => i.scheduledAt && new Date(i.scheduledAt) < new Date() && !["published", "archived"].includes(i.status)).length, AlertTriangle],
         ].map(([label, value, Icon]: any) => (
           <div
             key={label}
