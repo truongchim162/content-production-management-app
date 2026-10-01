@@ -12,7 +12,7 @@ import {
   type User,
 } from "firebase/auth";
 import {
-  addDoc,
+  addDoc as firestoreAddDoc,
   collection,
   deleteDoc,
   doc,
@@ -22,8 +22,8 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
-  setDoc,
-  updateDoc,
+  updateDoc as firestoreUpdateDoc,
+  setDoc as firestoreSetDoc,
   where,
 } from "firebase/firestore";
 import {
@@ -32,6 +32,7 @@ import {
   demoAccounts,
   roleLabels,
   createTeamMemberAccount,
+  sanitizeFirestoreData,
   type UserRole,
 } from "@/lib/firebase";
 import {
@@ -72,6 +73,13 @@ import {
   X,
 } from "lucide-react";
 
+const setDoc = (reference: Parameters<typeof firestoreSetDoc>[0], data: Record<string, unknown>, options?: Parameters<typeof firestoreSetDoc>[2]) =>
+  firestoreSetDoc(reference, sanitizeFirestoreData(data), options);
+const updateDoc = (reference: Parameters<typeof firestoreUpdateDoc>[0], data: Record<string, unknown>) =>
+  firestoreUpdateDoc(reference, sanitizeFirestoreData(data));
+const addDoc = (reference: Parameters<typeof firestoreAddDoc>[0], data: Record<string, unknown>) =>
+  firestoreAddDoc(reference, sanitizeFirestoreData(data));
+
 type Status =
   | "idea_pending"
   | "idea_needs_revision"
@@ -108,6 +116,12 @@ type Shot = {
   voice: string;
   text: string;
 };
+
+const emptyShot = (no: number): Shot => ({ no, shot: "", angle: "", voice: "", text: "" });
+const shotSummary = (shots: Shot[]) => shots
+  .filter((shot) => shot.shot.trim() || shot.text.trim() || shot.angle.trim())
+  .map((shot, index) => `Shot ${index + 1}: ${shot.shot || "Góc máy"}${shot.text ? ` — ${shot.text}` : shot.angle ? ` — ${shot.angle}` : ""}`)
+  .join("\n");
 type FeedbackHistoryEntry = {
   stage: "idea" | "script" | "video";
   author: string;
@@ -124,7 +138,19 @@ type HistoryEntry = {
   createdAt: unknown;
 };
 
-type Item = {
+  const normalizeItem = (item: Partial<Item> & { id: string }): Item => ({
+    ...item,
+    status: item.status === "approved_idea" ? "scripting" : item.status,
+    title: item.title || "Chưa đặt tên",
+    feedback: item.feedback || "",
+    feedbackHistory: item.feedbackHistory || [],
+    videoUrl: item.videoUrl || "",
+    refUrl: item.refUrl || "",
+    updatedAt: item.updatedAt || new Date().toISOString(),
+    assignedTo: item.assignedTo || "unassigned",
+  } as Item);
+
+  type Item = {
   id: string;
   title: string;
   description?: string;
@@ -239,9 +265,9 @@ const statusLabels: Record<Status, string> = {
   video_needs_revision: "Video cần sửa",
   video_resubmission: "Nộp lại video",
   script_pending: "Chờ duyệt kịch bản",
-  script_pending_creator: "Creator chờ duyệt kịch bản",
+  script_pending_creator: "Kịch bản chờ Creator duyệt",
   script_approved: "Chờ quay/dựng",
-  scripting: "Đang viết kịch bản",
+  scripting: "Đã duyệt - Tiến hành viết Kịch bản",
   shooting_pending: "Chờ quay",
   shooting_done: "Đã quay",
   video_pending: "Video chờ duyệt",
@@ -733,7 +759,7 @@ function RoleDrawer({
             [
               "Lịch Quay & Dựng Video",
               LayoutDashboard,
-              "Lịch Quay & Dựng Video",
+              "L��ch Quay & Dựng Video",
             ],
             ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
             [
@@ -1618,7 +1644,7 @@ function ContentWorkspace({
       source,
       (snap) => {
         const remote = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Item,
+          (d) => normalizeItem({ id: d.id, ...d.data() }),
         );
         setItems(remote);
       },
@@ -1739,7 +1765,7 @@ function ContentWorkspace({
       const transition = `${item.status}->${nextPatch.status}`;
       const allowedTransitions: Record<UserRole, string[]> = {
         lead: ["idea_pending->scripting", "idea_pending->idea_rejected", "video_pending_lead->video_rejected", "video_pending_lead->ready_to_publish", "video_pending->video_rejected", "editing_done->video_rejected", "editing_done->ready_to_publish"],
-        content: ["idea_rejected->idea_pending", "idea_needs_revision->idea_pending", "script_rejected->script_review_creator", "needs_revision->script_review_creator"],
+        content: ["idea_rejected->idea_pending", "idea_needs_revision->idea_pending", "scripting->script_review_creator", "script_rejected->script_review_creator", "needs_revision->script_review_creator"],
         creator: ["script_review_creator->waiting_production", "waiting_production->video_pending_lead", "video_rejected->video_pending_lead", "ready_to_publish->published", "ready_to_post->published"],
       };
       if (!allowedTransitions[role].includes(transition)) return;
@@ -1752,7 +1778,7 @@ function ContentWorkspace({
     const historyEntry: HistoryEntry = {
       action: activityAction(item.status, nextPatch.status),
       actorName: user.displayName || user.email || "Thành viên",
-      actorRole: "content",
+      actorRole: role,
       createdAt: new Date().toISOString(),
     };
     const patchWithHistory = {
@@ -1780,6 +1806,21 @@ function ContentWorkspace({
         },
         user.uid,
       );
+    if (nextPatch.status === "script_review_creator") {
+      await notifyRole(
+        "creator",
+        {
+          title: "Kịch bản đã được cập nhật",
+          message: `Content đã sửa và gửi lại kịch bản '${item.title}' để Creator duyệt lần nữa.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Lịch Quay & Dựng Video",
+        },
+        user.uid,
+      );
+      setToast("Đã gửi lại kịch bản cho Creator duyệt!");
+      window.setTimeout(() => setToast(""), 3000);
+    }
     if (nextPatch.status === "script_pending_creator") {
       await notifyRole(
         "creator",
@@ -1788,7 +1829,7 @@ function ContentWorkspace({
           message: `Kịch bản '${item.title}' đã được Lead duyệt, sẵn sàng quay/dựng.`,
           type: "status_change",
           linkId: item.id,
-          targetView: "Duyệt kịch bản",
+          targetView: "Lịch Quay & Dựng Video",
         },
         user.uid,
       );
@@ -1909,19 +1950,20 @@ function ContentWorkspace({
         </div>
       )}
       {!showForm && (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {visible.length ? (
             visible.map((item) => (
               <article
                 key={item.id}
-                className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+                className="flex h-full flex-col overflow-hidden rounded-2xl border border-border/50 bg-card p-4 text-left shadow-sm"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${item.status === "idea_rejected" || item.status === "idea_needs_revision" ? "bg-amber-100 text-amber-800" : item.status === "script_rejected" || item.status === "needs_revision" ? "bg-orange-100 text-orange-800" : item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-50 text-orange-600"}`}>
                       {statusLabels[item.status]}
                     </span>
-                    <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
+<h2 className="mt-2 line-clamp-2 text-left text-[15px] font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {item.description || "Chưa có mô tả."}
                     </p>
@@ -1956,15 +1998,16 @@ function ContentWorkspace({
                         title={item.title}
                       />
                     )}
-                  </div>
-                  <button
+                    </div>
+                    <button
                     onClick={() => setSelected(item)}
                     className="rounded-lg border border-border px-3 py-2 text-xs"
                   >
                     Mở chi tiết
                   </button>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
                   {item.contentType && (
                     <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
                       {item.contentType}
@@ -1983,7 +2026,7 @@ function ContentWorkspace({
             ))
           ) : (
             <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-              Chưa có nội dung �� trạng thái này.
+              Chưa có nội dung ở trạng thái này.
             </div>
           )}
         </div>
@@ -2039,7 +2082,7 @@ function StageDetailEditor({
   onDelete: () => void;
 }) {
   const canDelete = role === "lead" || (role === "content" && item.status === "idea_pending");
-  const canEdit = (role === "content" && ["idea_pending", "scripting"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && ["video_pending_lead", "ready_to_publish", "published"].includes(item.status));
+  const canEdit = (role === "content" && ["idea_pending", "scripting", "script_rejected", "needs_revision"].includes(item.status)) || (role === "creator" && ["script_review_creator", "ready_to_publish"].includes(item.status)) || (role === "lead" && ["video_pending_lead", "ready_to_publish", "published"].includes(item.status));
   const canCommentScript = role === "lead" && item.status === "script_review_creator";
   const readOnly = !canEdit;
   const [draft, setDraft] = useState({
@@ -2059,10 +2102,18 @@ function StageDetailEditor({
     likes: String(item.likes || ""),
     leadNote: item.leadNote || item.feedback || "",
   });
+  const [shots, setShots] = useState<Shot[]>(item.shots?.length ? item.shots : [emptyShot(1)]);
+  const updateShot = (index: number, key: "shot" | "text", value: string) => {
+    setShots((current) => current.map((shot, shotIndex) => shotIndex === index ? { ...shot, [key]: value } : shot));
+  };
+  const addShot = () => setShots((current) => [...current, emptyShot(current.length + 1)]);
+  const removeShot = (index: number) => setShots((current) => current.length === 1 ? [emptyShot(1)] : current.filter((_, shotIndex) => shotIndex !== index).map((shot, shotIndex) => ({ ...shot, no: shotIndex + 1 })));
+
   const [showReschedule, setShowReschedule] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dialogMessage, setDialogMessage] = useState("");
   const [newPublishDate, setNewPublishDate] = useState("");
+  const [completedShots, setCompletedShots] = useState<Record<number, boolean>>({});
   const feedbackTooShort = draft.leadNote.trim().length < 10;
   const update = (key: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const stage = item.status;
@@ -2086,21 +2137,22 @@ function StageDetailEditor({
         return;
       }
     }
-    onSave({ ...draft, ...extra, title: draft.title });
+    const normalizedShots = shots.map((shot, index) => ({ ...shot, no: index + 1, shot: shot.shot.trim(), text: shot.text.trim(), angle: shot.shot.trim(), voice: "" }));
+    onSave({ ...draft, ...extra, title: draft.title, shots: normalizedShots, location: shotSummary(normalizedShots) });
   };
   const field = (label: string, key: keyof typeof draft, placeholder = "", editable = !readOnly) => <label className="grid gap-1.5 text-xs font-medium">{label}<input value={draft[key]} disabled={!editable} onChange={(event) => update(key, event.target.value)} placeholder={placeholder} className="h-10 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-70" /></label>;
   return <div className="fixed inset-0 z-40 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section data-detail-form data-feedback-form={item.status.includes("rejected") || item.status.includes("revision") ? "true" : undefined} className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><header className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">{statusLabels[item.status]}</p><h2 className="mt-1 text-xl font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-5" /></button></header>
     <div className="mt-5 grid gap-4">
       {isIdea && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title", "Tên bài viết")}{field("Dạng Content", "contentType", "Review / Outfit / How-to")}{field("Mục tiêu", "goal", "Tăng tương tác")}{field("Link Ref", "reference", "https://...")}</div>}
-      {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
-      {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}{field("Góc quay / Hành động", "location", "Mô tả góc máy")}{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
-      {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngoại cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
+      {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{item.shots?.length ? <div className="rounded-2xl border border-border bg-muted/30 p-3"><h3 className="text-sm font-semibold">Checklist Shot quay</h3><div className="mt-3 grid gap-2">{item.shots.map((shot, index) => <label key={`${shot.no}-${index}`} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-xs ${completedShots[index] ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-background"}`}><input type="checkbox" checked={Boolean(completedShots[index])} onChange={(event) => setCompletedShots((current) => ({ ...current, [index]: event.target.checked }))} className="mt-0.5 size-4 accent-emerald-600" /><span><strong className="block">Shot {index + 1}: {shot.shot || "Góc máy chưa đặt tên"}</strong><span className="mt-1 block text-muted-foreground">{shot.text || shot.angle || "Chưa có mô tả hành động"}</span></span></label>)}</div></div> : null}{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
+      {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}<section className="rounded-2xl border border-border bg-muted/30 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Shot list · Góc quay / Hành động</h3><p className="mt-1 text-xs text-muted-foreground">Mỗi shot gồm góc máy và mô tả hành động, bối cảnh.</p></div><span className="rounded-full bg-background px-2 py-1 text-[10px]">{shots.length} shot</span></div><div className="mt-3 grid gap-2">{shots.map((shot, index) => <div key={index} className="grid gap-2 rounded-xl border border-border bg-background p-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_auto] sm:items-start"><label className="grid gap-1 text-[11px] font-medium"><span>Shot {index + 1} · Tên / loại góc máy</span><input value={shot.shot} onChange={(event) => updateShot(index, "shot", event.target.value)} placeholder="Cận cảnh / Toàn cảnh / Bán thân" className="h-9 rounded-lg border border-border bg-card px-2 text-xs" /></label><label className="grid gap-1 text-[11px] font-medium"><span>Mô tả hành động & bối cảnh</span><textarea value={shot.text} onChange={(event) => updateShot(index, "text", event.target.value)} placeholder="Chân bước vào khung hình, xoay người 180 độ..." className="min-h-9 rounded-lg border border-border bg-card p-2 text-xs" /></label><button type="button" onClick={() => removeShot(index)} aria-label={`Xóa Shot ${index + 1}`} className="mt-5 rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></button></div>)}</div><button type="button" onClick={addShot} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-semibold hover:bg-background"><Plus className="size-4" />Thêm Shot quay</button></section>{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
+      {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngo��i cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isVideoRevision && <div className="grid gap-4"><p className="text-sm font-semibold">Nộp lại bản dựng video</p>{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <SmartVideoPreview url={item.finalVideoLink} />}<label data-feedback-form className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
       {isPublish && <div className="grid gap-4"><p className="text-sm font-semibold">{role === "lead" ? "Lead Override · Chỉnh sửa nhanh" : "Kiểm tra bắt buộc trước khi đăng"}</p>{role === "lead" && <div className="grid gap-4 sm:grid-cols-2">{field("Caption", "caption", "Nhập caption")}{field("Hashtag", "hashtags", "#hashtag")}</div>}{field("Link Video Final", "finalVideoLink", "https://...")}{field("Thời gian dự kiến đăng bài", "scheduledPublishDate", "YYYY-MM-DD HH:mm")}{role !== "lead" && field("URL bài đã đăng TikTok / Reels", "publishedLink", "https://...")}</div>}
       {!isIdea && !isScript && !isProduction && !isReview && !isPublish && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title")}{field("Link Video Final", "finalVideoLink")}</div>}
       {(item.feedbackHistory?.length || item.history?.length) ? <div className="border-t border-border pt-4"><h3 className="text-sm font-semibold">Lịch sử Feedback</h3><div className="mt-2 space-y-2">{item.feedbackHistory?.map((entry, index) => <div key={`${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><div className="flex items-center justify-between gap-2"><strong>{entry.author}</strong><span className="text-muted-foreground">{entry.stage === "idea" ? "Ý tưởng" : entry.stage === "script" ? "Kịch bản" : "Video"} · {new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(entry.createdAt))}</span></div><p className="mt-1 whitespace-pre-wrap">{entry.content}</p></div>)}{item.history?.filter((entry) => entry.note).map((entry, index) => <p key={`legacy-${entry.createdAt}-${index}`} className="rounded-lg bg-muted p-2 text-xs"><strong>{entry.actorName}:</strong> {entry.note}</p>)}</div></div> : item.feedback && <div className="border-t border-border pt-4 text-sm"><strong>Feedback hiện tại:</strong><p className="mt-1 whitespace-pre-wrap">{item.feedback}</p></div>}
-    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => setConfirmDelete(true)} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{item.status === "published" && role === "lead" && <button type="button" onClick={() => save({ views: Number(draft.views) || 0, likes: Number(draft.likes) || 0 })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu KPI</button>}{isPublish && role === "lead" && <button type="button" onClick={() => save({ caption: draft.caption, hashtags: draft.hashtags, scheduledPublishDate: draft.scheduledPublishDate, scheduledAt: draft.scheduledPublishDate })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu Override</button>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer><ConfirmDialogModal open={confirmDelete} title="Xóa bài viết?" description="Thao tác này không thể hoàn tác." confirmLabel="Xóa bài viết" destructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onDelete(); }} /><ConfirmDialogModal open={Boolean(dialogMessage)} title="Không thể thực hiện" description={dialogMessage} confirmLabel="Đã hiểu" onCancel={() => setDialogMessage("")} onConfirm={() => setDialogMessage("")} />{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
+    </div><footer className="mt-6 flex flex-wrap justify-end gap-2 border-t border-border pt-4"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Đóng</button>{canDelete && <button type="button" onClick={() => setConfirmDelete(true)} className="mr-auto rounded-lg border border-rose-300 px-4 py-2 text-sm text-rose-700">Xóa bài viết</button>}{stage === "script_review_creator" && role === "creator" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa Kịch bản</button><button type="button" onClick={() => save({ status: "waiting_production" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt Kịch bản & Nhận Quay</button></>}{stage === "waiting_production" && role === "creator" && <button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "script_rejected", scriptFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa KB</button>}{["script_rejected", "needs_revision"].includes(stage) && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator", scriptFeedback: "", feedback: "" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật &amp; gửi lại kịch bản</button>}{isVideoRevision && role === "creator" && <button type="button" disabled={!draft.finalVideoLink} onClick={() => save({ status: "video_pending_lead", videoFeedback: undefined })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Nộp lại bản dựng video</button>}{isReview && role === "lead" && <><button type="button" disabled={feedbackTooShort} onClick={() => save({ status: "video_rejected", videoFeedback: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border border-rose-300 disabled:cursor-not-allowed disabled:opacity-40 px-4 py-2 text-sm text-rose-700">Yêu cầu sửa</button><button type="button" onClick={() => item.wasOverdue || isPastPublishDeadline(item) ? setShowReschedule(true) : save({ status: "ready_to_publish" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Duyệt video</button></>}{item.status === "published" && role === "lead" && <button type="button" onClick={() => save({ views: Number(draft.views) || 0, likes: Number(draft.likes) || 0 })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu KPI</button>}{isPublish && role === "lead" && <button type="button" onClick={() => save({ caption: draft.caption, hashtags: draft.hashtags, scheduledPublishDate: draft.scheduledPublishDate, scheduledAt: draft.scheduledPublishDate })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu Override</button>}{isPublish && role === "creator" && <button type="button" disabled={!draft.finalVideoLink || !draft.publishedLink} onClick={() => save({ status: "published", publishedAt: new Date().toISOString() })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Đã đăng bài</button>}{canCommentScript && <button type="button" onClick={() => save({ leadNote: draft.leadNote, feedback: draft.leadNote })} className="rounded-lg border px-4 py-2 text-sm">Lưu góp ý</button>}{isIdea && role === "content" && <button type="button" onClick={() => save({ status: "idea_pending" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại ý tưởng</button>}{isScript && role === "content" && <button type="button" onClick={() => save({ status: "script_review_creator" })} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Cập nhật & gửi lại kịch bản</button>}{!readOnly && !isReview && !isPublish && !isIdea && !isScript && !isVideoRevision && <button type="button" onClick={() => save()} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu thay đổi</button>}</footer><ConfirmDialogModal open={confirmDelete} title="Xóa bài viết?" description="Thao tác này không thể hoàn tác." confirmLabel="Xóa bài viết" destructive onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onDelete(); }} /><ConfirmDialogModal open={Boolean(dialogMessage)} title="Không thể thực hiện" description={dialogMessage} confirmLabel="Đã hiểu" onCancel={() => setDialogMessage("")} onConfirm={() => setDialogMessage("")} />{showReschedule && <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"><div className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-2xl"><h3 className="text-lg font-semibold">Cập nhật lịch đăng</h3><p className="mt-2 text-sm text-muted-foreground">Bài đã trễ deadline. Chọn thời gian đăng mới trong tương lai.</p><input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} value={newPublishDate} onChange={(event) => setNewPublishDate(event.target.value)} className="mt-4 h-10 w-full rounded-lg border bg-background px-3 text-sm" /><div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => setShowReschedule(false)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button><button type="button" disabled={!newPublishDate || new Date(newPublishDate).getTime() <= Date.now()} onClick={() => { save({ status: "ready_to_publish", scheduledPublishDate: new Date(newPublishDate).toISOString(), scheduledAt: new Date(newPublishDate).toISOString(), wasOverdue: true }); setShowReschedule(false); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white disabled:opacity-40">Xác nhận lịch mới</button></div></div></div>}</section></div>;
 }
 
 function IdeaVault({
@@ -2168,7 +2220,7 @@ function IdeaVault({
       </div>
       {children}
       {filtered.length ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {filtered.map((item) => (
             <article key={item.id} className="group overflow-hidden rounded-xl border border-stone-200 bg-white text-center shadow-sm transition-shadow hover:shadow-md">
               <div className="relative aspect-[9/16] w-full overflow-hidden bg-zinc-100">
@@ -2302,7 +2354,7 @@ function VideoPreview({
         ? `https://www.tiktok.com/player/v1/${tiktokId}`
         : value;
   const player = (
-    <div className="mx-auto w-full aspect-[9/16] overflow-hidden rounded-xl border border-stone-200 bg-black/5 shadow-md dark:border-zinc-700">
+    <div className="mx-auto aspect-[9/16] max-h-[380px] w-full overflow-hidden rounded-xl bg-black/5">
       {isDirect ? (
         <video
           controls
@@ -2327,25 +2379,15 @@ function VideoPreview({
     </span>
   );
   return (
-    <div className="mx-auto my-3 flex w-full max-w-[340px] flex-col items-center justify-center rounded-2xl border border-stone-200/60 bg-stone-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-800/40">
-      <div className="mb-2 flex w-full items-center justify-between gap-2 text-xs">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          {badge}
-          {title && (
-            <span
-              className="min-w-0 truncate font-medium text-foreground"
-              title={title}
-            >
-              {title}
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 gap-2">
+    <div className="relative mt-3 w-full overflow-hidden rounded-xl">
+      <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex items-center justify-between gap-2 text-xs">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{badge}</div>
+        <div className="pointer-events-auto flex shrink-0 gap-2">
           <a
             href={value}
             target="_blank"
             rel="noreferrer"
-            className="rounded-md border border-border bg-card px-2 py-1"
+            className="rounded-full border border-white/20 bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md"
           >
             Mở link gốc
           </a>
@@ -2442,7 +2484,7 @@ function CreativeAssistant({
         <div>
           <h2 className="font-semibold">{roleConfig.title}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Brainstorm nhanh cùng AI, sau đó chuyển thẳng thành ý tưởng mới.
+            Brainstorm nhanh cùng AI, sau đó chuyển thẳng thành ý tư���ng mới.
           </p>
         </div>
       </div>
@@ -2844,7 +2886,7 @@ function ScriptEditor({
         no: 1,
         shot: "Mở cảnh toàn thân với outfit hoàn chỉnh",
         angle: "Wide shot ngang hông",
-        voice: "Hôm nay mặc gì để vừa thoải mái vừa nổi bật?",
+        voice: "Hôm nay mặc gì để vừa tho��i mái vừa nổi bật?",
         text: "LOOK OF THE DAY",
       },
       {
@@ -3027,7 +3069,7 @@ type ScheduleEntry = { type: ScheduleType; shift: "morning" | "afternoon" | "ful
 
 const scheduleTypes: Record<ScheduleType, { label: string; icon: string; color: string }> = {
   studio: { label: "Studio / Văn phòng", icon: "●", color: "bg-emerald-500" },
-  onsite: { label: "Đi quay ngoại cảnh", icon: "🎬", color: "bg-zinc-900" },
+  onsite: { label: "Đi quay ngoại cảnh", icon: "���", color: "bg-zinc-900" },
   wfh: { label: "Làm online / WFH", icon: "●", color: "bg-sky-500" },
   off: { label: "Nghỉ phép", icon: "●", color: "bg-rose-500" },
 };
@@ -3068,7 +3110,7 @@ function WorkSchedule({ user, isLead = false }: { user: User; isLead?: boolean }
         <div className="rounded-2xl border bg-card p-3 sm:p-5"><div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted-foreground">{["CN", "T2", "T3", "T4", "T5", "T6", "T7"].map((day) => <span key={day} className="p-2">{day}</span>)}</div><div className="grid grid-cols-7 gap-1">{Array.from({ length: firstDay }).map((_, index) => <span key={`blank-${index}`} />)}{Array.from({ length: days }, (_, index) => { const day = index + 1; const dateKey = keyFor(day); const entry = entries[dateKey]; const config = entry && scheduleTypes[entry.type]; return <button type="button" key={dateKey} onClick={() => { setSelectedDate(dateKey); if (entry) { setType(entry.type); setShift(entry.shift); setLocation(entry.location || ""); setOutfit(entry.outfit || ""); } }} className={`relative min-h-20 rounded-xl border p-2 text-left transition hover:border-zinc-900 ${dateKey === todayKey ? "ring-2 ring-zinc-900" : ""} ${entry?.checkedIn ? "border-emerald-700 ring-2 ring-emerald-300" : "border-border"}`}><span className="text-sm font-semibold">{day}</span>{entry && <span className={`mt-2 flex items-center gap-1 text-[10px] font-medium ${entry.type === "onsite" ? "text-zinc-900" : "text-muted-foreground"}`}><i className={`size-2 rounded-full ${config?.color}`} />{config?.icon} <span className="hidden sm:inline">{config?.label}</span></span>}{entry?.checkedIn && <CheckCircle2 className="absolute right-1 top-1 size-4 text-emerald-600" aria-label="Đã chấm công" />}</button>})}</div></div>
         <aside className="rounded-2xl border bg-card p-4"><h2 className="font-semibold">Trạng thái</h2><div className="mt-4 space-y-3">{Object.entries(scheduleTypes).map(([key, config]) => <div key={key} className="flex items-center gap-2 text-sm"><i className={`size-3 rounded-full ${config.color}`} />{config.icon} {config.label}</div>)}<p className="pt-2 text-xs text-muted-foreground">Viền xanh và dấu tick là ngày đã chấm công thực tế.</p></div></aside>
       </div>
-      {selectedDate && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Ngày đăng ký</p><h2 className="text-xl font-semibold">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString("vi-VN")}</h2></div><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-3 py-1">×</button></div><div className="mt-5 grid grid-cols-2 gap-2">{Object.entries(scheduleTypes).map(([key, config]) => <button type="button" key={key} onClick={() => setType(key as ScheduleType)} className={`rounded-xl border p-3 text-left text-sm ${type === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}><span className="mr-2">{config.icon}</span>{config.label}</button>)}</div><div className="mt-4"><label className="text-sm font-medium">Ca làm</label><div className="mt-2 grid grid-cols-3 gap-2">{[["morning", "Ca sáng"], ["afternoon", "Ca chiều"], ["full", "Cả ngày"]].map(([key, label]) => <button type="button" key={key} onClick={() => setShift(key as ScheduleEntry["shift"])} className={`rounded-lg border px-2 py-2 text-xs ${shift === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}>{label}</button>)}</div></div>{type === "onsite" && <div className="mt-4 grid gap-3"><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Địa điểm quay" className="rounded-lg border bg-background px-3 py-2 text-sm" /><input value={outfit} onChange={(event) => setOutfit(event.target.value)} placeholder="Bộ sưu tập / Outfit" className="rounded-lg border bg-background px-3 py-2 text-sm" /></div>}<div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button>{selectedDate === todayKey && <button type="button" onClick={checkIn} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm text-emerald-700">Chấm công hôm nay</button>}<button type="button" onClick={saveEntry} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu đăng ký</button></div></div></div>}
+      {selectedDate && <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"><div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground">Ngày đăng ký</p><h2 className="text-xl font-semibold">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString("vi-VN")}</h2></div><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-3 py-1">×</button></div><div className="mt-5 grid grid-cols-2 gap-2">{Object.entries(scheduleTypes).map(([key, config]) => <button type="button" key={key} onClick={() => setType(key as ScheduleType)} className={`rounded-xl border p-3 text-left text-sm ${type === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}><span className="mr-2">{config.icon}</span>{config.label}</button>)}</div><div className="mt-4"><label className="text-sm font-medium">Ca làm</label><div className="mt-2 grid grid-cols-3 gap-2">{[["morning", "Ca sáng"], ["afternoon", "Ca chiều"], ["full", "Cả ngày"]].map(([key, label]) => <button type="button" key={key} onClick={() => setShift(key as ScheduleEntry["shift"])} className={`rounded-lg border px-2 py-2 text-xs ${shift === key ? "border-zinc-900 bg-zinc-100" : "border-border"}`}>{label}</button>)}</div></div>{type === "onsite" && <div className="mt-4 grid gap-3"><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="Địa điểm quay" className="rounded-lg border bg-background px-3 py-2 text-sm" /><input value={outfit} onChange={(event) => setOutfit(event.target.value)} placeholder="Bộ sưu tập / Outfit" className="rounded-lg border bg-background px-3 py-2 text-sm" /></div>}<div className="mt-5 flex flex-wrap justify-end gap-2"><button type="button" onClick={() => setSelectedDate(null)} className="rounded-lg border px-4 py-2 text-sm">Hủy</button>{selectedDate === todayKey && <button type="button" onClick={checkIn} className="rounded-lg border border-emerald-600 px-4 py-2 text-sm text-emerald-700">Ch���m công hôm nay</button>}<button type="button" onClick={saveEntry} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white">Lưu đăng ký</button></div></div></div>}
     </section>
   );
 }
@@ -3085,7 +3127,9 @@ function CreatorWorkspace({
   const [items, setItems] = useState<Item[]>(
     demoItems.filter((item) =>
       [
+        "script_review_creator",
         "script_pending_creator",
+        "waiting_production",
         "script_approved",
         "shooting_pending",
         "shooting_done",
@@ -3120,7 +3164,7 @@ function CreatorWorkspace({
       q,
       (snap) => {
         const remote = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Item,
+          (d) => normalizeItem({ id: d.id, ...d.data() }),
         );
         if (remote.length)
           setItems(
@@ -3129,8 +3173,11 @@ function CreatorWorkspace({
                 !["archived", "rejected"].includes(item.status) &&
                 (item.ownerId === user.uid ||
                   [
+                    "script_review_creator",
                     "script_pending_creator",
+                    "waiting_production",
                     "script_approved",
+                    "video_pending_lead",
                     "video_pending",
                     "video_needs_revision",
                     "ready_to_post",
@@ -3141,7 +3188,7 @@ function CreatorWorkspace({
       },
       () => undefined,
     );
-  }, []);
+  }, [user.uid]);
   const update = async (item: Item, patch: Partial<Item>) => {
     const isPublishing = patch.status === "published";
     const nextPatch =
@@ -3248,30 +3295,34 @@ function CreatorWorkspace({
   });
   const allCreatorItems = items.filter((item) =>
     [
+      "script_review_creator",
       "script_pending_creator",
+      "waiting_production",
       "script_approved",
       "shooting_pending",
       "shooting_done",
       "editing_done",
+      "video_pending_lead",
       "video_pending",
       "needs_revision",
       "script_rejected",
       "video_rejected",
+      "ready_to_publish",
       "ready_to_post",
     ].includes(item.status),
   );
-  const creatorPriority = (item: Item) => ["script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
+  const creatorPriority = (item: Item) => ["script_review_creator", "script_pending_creator", "script_rejected", "video_rejected", "needs_revision", "video_needs_revision"].includes(item.status) ? 0 : 1;
   const visible =
     creatorFilter === "script"
-      ? items.filter((item) => item.status === "script_pending_creator")
+      ? items.filter((item) => ["script_review_creator", "script_pending_creator", "approved_idea"].includes(item.status))
       : creatorFilter === "shoot"
-        ? items.filter((item) => item.status === "script_approved")
-        : creatorFilter === "video"
-          ? items.filter((item) => item.status === "video_pending")
-          : creatorFilter === "revision"
-            ? items.filter((item) => item.status === "video_needs_revision")
-            : creatorFilter === "ready"
-              ? items.filter((item) => item.status === "ready_to_post")
+        ? items.filter((item) => ["waiting_production", "script_approved"].includes(item.status))
+      : creatorFilter === "video"
+        ? items.filter((item) => ["video_pending_lead", "video_pending"].includes(item.status))
+      : creatorFilter === "revision"
+        ? items.filter((item) => ["video_rejected", "video_needs_revision", "script_rejected", "needs_revision"].includes(item.status))
+      : creatorFilter === "ready"
+        ? items.filter((item) => ["ready_to_publish", "ready_to_post"].includes(item.status))
               : creatorFilter === "published"
                 ? filteredPublishedItems
                 : creatorFilter === "overdue"
@@ -3403,7 +3454,7 @@ function CreatorWorkspace({
         ))}
       </div>
       {view === "Danh sách bài đăng" ? (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {publishedItems.length ? (
             publishedItems.map((item) => (
               <article
@@ -3456,7 +3507,7 @@ function CreatorWorkspace({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="grid w-full grid-cols-1 gap-5 md:grid-cols-2">
           {visible.length ? (
             visible.map((item) => (
               <CreatorCard
@@ -3501,17 +3552,13 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
     item.status !== "published";
   return (
     <article
-      className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${overdue ? "border-destructive" : "border-border"}`}
+      className={`flex h-fit min-w-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card p-4 text-left shadow-sm ${overdue ? "border-destructive" : ""}`}
     >
-      <div className="flex flex-col items-center justify-center gap-3 p-5 text-center sm:p-6">
+      <div className="flex min-w-0 flex-col gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`text-[10px] uppercase tracking-wider ${item.status === "video_needs_revision" ? "text-destructive" : "text-orange-500"}`}
-            >
-              {item.status === "video_needs_revision"
-                ? "CẦN FEEDBACK / CẦN SỬA"
-                : statusLabels[item.status]}
+          <div className="flex items-start justify-between gap-3">
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${item.status === "video_rejected" || item.status === "video_needs_revision" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"}`}>
+              {item.status === "video_rejected" || item.status === "video_needs_revision" ? "Cần sửa Video" : statusLabels[item.status]}
             </span>
             {item.status === "video_needs_revision" && item.feedback && (
               <span className="rounded-full bg-destructive/10 px-2 py-1 text-[10px] text-destructive">
@@ -3525,11 +3572,12 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
               </span>
             )}
           </div>
-          <h2 className="mx-auto max-w-[85%] text-center text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100">{item.title}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {item.location || "Chưa có bối cảnh"} ·{" "}
-            {item.outfit || "Chưa có outfit"}
-          </p>
+          <h2 className="mt-1 line-clamp-2 text-[15px] font-bold leading-snug text-foreground">{item.title}</h2>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground">
+            <span className="rounded-full bg-muted px-2 py-1">Bối cảnh: {item.location ? "Đã có" : "Chưa có"}</span>
+            <span className="rounded-full bg-muted px-2 py-1">Outfit: {item.outfit ? "Đã có" : "Chưa có"}</span>
+            <span className="rounded-full bg-muted px-2 py-1">Đạo cụ: {item.shots?.length ? "Đã có" : "Chưa có"}</span>
+          </div>
           <ItemMetadata item={item} />
           {item.status === "published" && (
             <div className="mt-3 rounded-lg bg-stone-50 p-3">
@@ -3555,14 +3603,12 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
               </div>
             </div>
           )}
-          <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          <div className="relative mt-1 w-full overflow-hidden rounded-xl">
+            <span className="absolute left-2 top-2 z-10 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">{primaryVideo(item).url ? "MEDIA" : "REF"}</span>
+            <div className="max-h-[360px] aspect-[9/16] w-full overflow-hidden rounded-xl bg-muted"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          </div>
         </div>
-        <button
-          onClick={onOpen}
-          className="absolute right-4 top-4 rounded-lg border border-stone-300 px-3 py-1 text-xs font-medium transition-colors hover:bg-stone-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          Mở bài
-        </button>
+        <button type="button" onClick={onOpen} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">Mở kịch bản</button>
       </div>
       {item.scheduledAt && (
         <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -3570,7 +3616,9 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
           Đăng dự kiến: {new Date(item.scheduledAt).toLocaleString("vi-VN")}
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 grid gap-2 border-t border-border pt-3">
+        <button type="button" onClick={onOpen} className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Nộp Video Bản Dựng / Mở bài</button>
+        <div className="flex flex-wrap gap-2">
         <span className="rounded-full bg-accent px-2 py-1 text-[10px]">
           {item.shots?.length || 0} shots
         </span>
@@ -3582,6 +3630,7 @@ function CreatorCard({ item, onOpen }: { item: Item; onOpen: () => void }) {
             {p}
           </span>
         ))}
+        </div>
       </div>
     </article>
   );
@@ -4080,7 +4129,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
       collection(db, "contentItems"),
       (snap) => {
         const remote = snap.docs.map(
-          (d) => ({ id: d.id, ...d.data() }) as Item,
+          (d) => normalizeItem({ id: d.id, ...d.data() }),
         );
         setItems(remote);
       },
@@ -4100,18 +4149,41 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
     };
   }, []);
   const updateStatus = async (
-    item: Item,
-    status: Status,
-    extra: Partial<Item> = {},
+  item: Item,
+  status: Status,
+  extra: Partial<Item> = {},
   ) => {
-    const patch = { status, ...extra };
-    setItems((all) =>
-      all.map((x) => (x.id === item.id ? { ...x, ...patch } : x)),
-    );
-    setSelected(null);
-    setNote("");
-    if (!item.id.startsWith("demo-"))
-      await setDoc(doc(db, "contentItems", item.id), patch, { merge: true });
+  const patch = {
+  status,
+  ...extra,
+  ...(status === "scripting" && item.status === "idea_pending"
+  ? { approvedAt: serverTimestamp(), feedbackUnread: 0 }
+  : {}),
+  history: [
+  ...(item.history || []),
+  {
+  action: activityAction(item.status, status),
+  actorName: user.displayName || user.email || "Lead",
+  actorRole: "lead" as UserRole,
+  createdAt: new Date().toISOString(),
+  },
+  ],
+  };
+  setItems((all) =>
+  all.map((x) => (x.id === item.id ? { ...x, ...patch } : x)),
+  );
+  setSelected(null);
+  setNote("");
+  await setDoc(doc(db, "contentItems", item.id), patch, { merge: true });
+  if (status === "scripting" && item.status === "idea_pending" && item.ownerId) {
+  await notifyUser(item.ownerId, {
+  title: "Ý tưởng đã được Lead duyệt",
+  message: `Ý tưởng '${item.title}' đã được duyệt. Vui lòng bắt đầu viết kịch bản.`,
+  type: "status_change",
+  linkId: item.id,
+  targetView: "Tất c��� Content / Viết Kịch Bản",
+  });
+  }
   };
   const saveSettings = async () => {
     setSaving(true);
@@ -4592,7 +4664,7 @@ function LeadWorkspace({
     const unsub = onSnapshot(
       collection(db, "contentItems"),
       (snap) =>
-        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Item)),
+        setItems(snap.docs.map((d) => normalizeItem({ id: d.id, ...d.data() }))),
       () => undefined,
     );
     const settingsUnsub = onSnapshot(
@@ -4617,15 +4689,19 @@ function LeadWorkspace({
   const persist = async (item: Item, patch: Partial<Item>) => {
     const publishDate = item.scheduledPublishDate || item.scheduledAt;
   const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
+  const isIdeaApproval =
+    ["idea_pending", "approved_idea"].includes(item.status) &&
+    ["scripting", "approved_idea"].includes(patch.status as string);
   const nextPatch =
-    patch.status === "published" && wasOverdue
-      ? { ...patch, status: "published" as Status, wasOverdue: true }
-      : wasOverdue && patch.status !== "published"
-      ? { ...patch, status: "overdue" as Status }
-      :
-      patch.status === "approved_idea" && item.status === "script_pending"
-        ? { ...patch, status: "script_approved" as Status }
-        : patch;
+    isIdeaApproval
+      ? { ...patch, status: "scripting" as Status, approvedAt: serverTimestamp() }
+      : patch.status === "published" && wasOverdue
+        ? { ...patch, status: "published" as Status, wasOverdue: true }
+        : wasOverdue && patch.status !== "published"
+          ? { ...patch, status: "overdue" as Status }
+          : patch.status === "approved_idea" && item.status === "script_pending"
+            ? { ...patch, status: "script_approved" as Status }
+            : patch;
     const patchWithHistory = {
       ...nextPatch,
       history: [
@@ -4644,9 +4720,27 @@ function LeadWorkspace({
     );
     setSelected(null);
     try {
-      await setDoc(doc(db, "contentItems", item.id), patchWithHistory, {
-        merge: true,
-      });
+      const itemRef = doc(db, "contentItems", item.id);
+      await setDoc(itemRef, patchWithHistory, { merge: true });
+      const saved = await getDoc(itemRef);
+      const savedStatus = saved.exists() ? (saved.data().status as Status) : undefined;
+      if (savedStatus !== nextPatch.status) {
+        throw new Error(`Trạng thái chưa được lưu: ${savedStatus || "không có"}`);
+      }
+      setItems((all) =>
+        all.map((current) =>
+          current.id === item.id ? { ...current, ...saved.data() } as Item : current,
+        ),
+      );
+      if (isIdeaApproval && item.ownerId) {
+        await notifyUser(item.ownerId, {
+          title: "Ý tưởng đã được Lead duyệt",
+          message: `Ý tưởng '${item.title}' đã chuyển sang Cần viết / sửa kịch bản.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Tất cả Content / Viết Kịch Bản",
+        });
+      }
       if (item.ownerId && patch.status === "rejected")
         await notifyUser(item.ownerId, {
           title: "Content/Video bị từ chối",
@@ -4660,7 +4754,7 @@ function LeadWorkspace({
         });
       else if (
         item.ownerId &&
-        ["scripting", "published"].includes(patch.status as string)
+        ["scripting", "published"].includes(nextPatch.status as string)
       )
         await notifyUser(item.ownerId, {
           title: "Đã được Lead phê duyệt",
@@ -4674,6 +4768,8 @@ function LeadWorkspace({
         });
     } catch (error) {
       console.error("[v0] Lead update failed:", error);
+      setToast(error instanceof Error ? error.message : "Không thể lưu trạng thái bài viết. Vui lòng thử lại.");
+      setItems((all) => all.map((current) => current.id === item.id ? item : current));
     }
   };
   const cleanupTestData = async () => {
@@ -4782,7 +4878,7 @@ function LeadWorkspace({
     "Ý tưởng chờ duyệt": pendingIdeas,
     "Chờ quay/dựng": items.filter((i) => i.status === "script_approved"),
     "Bài đã duyệt": items.filter((i) => ["video_approved", "editing_done"].includes(i.status)),
-    "Bài sẵn sàng đăng": items.filter((i) => i.status === "ready_to_post"),
+    "Bài s��n sàng đăng": items.filter((i) => i.status === "ready_to_post"),
     "Bài đã đăng": published,
     "Trễ deadline": overdue,
   };
@@ -5048,7 +5144,10 @@ function LeadWorkspace({
               {item.status === "video_needs_revision" ? "CẦN SỬA" : statusLabels[item.status]}
             </div>
             <button type="button" onClick={() => setSelected(item)} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur-md">Mở chi tiết</button>
-            <div className="mx-auto my-3 w-full max-w-[320px] md:max-w-[350px]"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+<div className="relative mt-1 w-full overflow-hidden rounded-xl">
+            <div className="absolute left-2 top-2 z-10 rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">{primaryVideo(item).url ? "MEDIA" : "REF"}</div>
+            <div className="max-h-[360px] aspect-[9/16] w-full overflow-hidden rounded-xl bg-muted"><VideoPreview {...primaryVideo(item)} title={item.title} /></div>
+          </div>
           </div>
                   </div>
                 </article>
@@ -5082,12 +5181,9 @@ function LeadWorkspace({
                   selected.status,
                 ) && (
                   <button
-                    onClick={() =>
-                      persist(selected, {
-                        status: "scripting",
-                        approvedAt: serverTimestamp(),
-                      })
-                    }
+                    onClick={() => {
+                      void persist(selected, { status: "scripting" });
+                    }}
                     className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
                   >
                     Duyệt ý tưởng
