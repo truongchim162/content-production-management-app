@@ -733,7 +733,7 @@ function RoleDrawer({
             [
               "Lịch Quay & Dựng Video",
               LayoutDashboard,
-              "Lịch Quay & Dựng Video",
+              "L��ch Quay & Dựng Video",
             ],
             ["Lịch làm việc", CalendarDays, "Đăng ký lịch & chấm công"],
             [
@@ -4630,15 +4630,17 @@ function LeadWorkspace({
   const persist = async (item: Item, patch: Partial<Item>) => {
     const publishDate = item.scheduledPublishDate || item.scheduledAt;
   const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
+  const isIdeaApproval = item.status === "idea_pending" && patch.status === "scripting";
   const nextPatch =
-    patch.status === "published" && wasOverdue
-      ? { ...patch, status: "published" as Status, wasOverdue: true }
-      : wasOverdue && patch.status !== "published"
-      ? { ...patch, status: "overdue" as Status }
-      :
-      patch.status === "approved_idea" && item.status === "script_pending"
-        ? { ...patch, status: "script_approved" as Status }
-        : patch;
+    isIdeaApproval
+      ? { ...patch, status: "scripting" as Status, approvedAt: serverTimestamp() }
+      : patch.status === "published" && wasOverdue
+        ? { ...patch, status: "published" as Status, wasOverdue: true }
+        : wasOverdue && patch.status !== "published"
+          ? { ...patch, status: "overdue" as Status }
+          : patch.status === "approved_idea" && item.status === "script_pending"
+            ? { ...patch, status: "script_approved" as Status }
+            : patch;
     const patchWithHistory = {
       ...nextPatch,
       history: [
@@ -4673,7 +4675,7 @@ function LeadWorkspace({
         });
       else if (
         item.ownerId &&
-        ["scripting", "published"].includes(patch.status as string)
+        ["scripting", "published"].includes(nextPatch.status as string)
       )
         await notifyUser(item.ownerId, {
           title: "Đã được Lead phê duyệt",
@@ -5098,12 +5100,9 @@ function LeadWorkspace({
                   selected.status,
                 ) && (
                   <button
-                    onClick={() =>
-                      persist(selected, {
-                        status: "scripting",
-                        approvedAt: serverTimestamp(),
-                      })
-                    }
+                    onClick={() => {
+                      void persist(selected, { status: "scripting" });
+                    }}
                     className="rounded-lg bg-primary px-3 py-2 text-xs text-primary-foreground"
                   >
                     Duyệt ý tưởng
