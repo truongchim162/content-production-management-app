@@ -116,6 +116,12 @@ type Shot = {
   voice: string;
   text: string;
 };
+
+const emptyShot = (no: number): Shot => ({ no, shot: "", angle: "", voice: "", text: "" });
+const shotSummary = (shots: Shot[]) => shots
+  .filter((shot) => shot.shot.trim() || shot.text.trim() || shot.angle.trim())
+  .map((shot, index) => `Shot ${index + 1}: ${shot.shot || "Góc máy"}${shot.text ? ` — ${shot.text}` : shot.angle ? ` — ${shot.angle}` : ""}`)
+  .join("\n");
 type FeedbackHistoryEntry = {
   stage: "idea" | "script" | "video";
   author: string;
@@ -2081,10 +2087,18 @@ function StageDetailEditor({
     likes: String(item.likes || ""),
     leadNote: item.leadNote || item.feedback || "",
   });
+  const [shots, setShots] = useState<Shot[]>(item.shots?.length ? item.shots : [emptyShot(1)]);
+  const updateShot = (index: number, key: "shot" | "text", value: string) => {
+    setShots((current) => current.map((shot, shotIndex) => shotIndex === index ? { ...shot, [key]: value } : shot));
+  };
+  const addShot = () => setShots((current) => [...current, emptyShot(current.length + 1)]);
+  const removeShot = (index: number) => setShots((current) => current.length === 1 ? [emptyShot(1)] : current.filter((_, shotIndex) => shotIndex !== index).map((shot, shotIndex) => ({ ...shot, no: shotIndex + 1 })));
+
   const [showReschedule, setShowReschedule] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dialogMessage, setDialogMessage] = useState("");
   const [newPublishDate, setNewPublishDate] = useState("");
+  const [completedShots, setCompletedShots] = useState<Record<number, boolean>>({});
   const feedbackTooShort = draft.leadNote.trim().length < 10;
   const update = (key: keyof typeof draft, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const stage = item.status;
@@ -2108,14 +2122,15 @@ function StageDetailEditor({
         return;
       }
     }
-    onSave({ ...draft, ...extra, title: draft.title });
+    const normalizedShots = shots.map((shot, index) => ({ ...shot, no: index + 1, shot: shot.shot.trim(), text: shot.text.trim(), angle: shot.shot.trim(), voice: "" }));
+    onSave({ ...draft, ...extra, title: draft.title, shots: normalizedShots, location: shotSummary(normalizedShots) });
   };
   const field = (label: string, key: keyof typeof draft, placeholder = "", editable = !readOnly) => <label className="grid gap-1.5 text-xs font-medium">{label}<input value={draft[key]} disabled={!editable} onChange={(event) => update(key, event.target.value)} placeholder={placeholder} className="h-10 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-70" /></label>;
   return <div className="fixed inset-0 z-40 grid place-items-end bg-black/40 p-0 sm:place-items-center sm:p-4"><section data-detail-form data-feedback-form={item.status.includes("rejected") || item.status.includes("revision") ? "true" : undefined} className="max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-card p-5 shadow-xl sm:rounded-2xl sm:p-6"><header className="flex items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">{statusLabels[item.status]}</p><h2 className="mt-1 text-xl font-semibold">{item.title}</h2></div><button type="button" onClick={onClose} aria-label="Đóng"><X className="size-5" /></button></header>
     <div className="mt-5 grid gap-4">
       {isIdea && <div className="grid gap-4 sm:grid-cols-2">{field("Tiêu đề", "title", "Tên bài viết")}{field("Dạng Content", "contentType", "Review / Outfit / How-to")}{field("Mục tiêu", "goal", "Tăng tương tác")}{field("Link Ref", "reference", "https://...")}</div>}
-      {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
-      {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}{field("Góc quay / Hành động", "location", "Mô tả góc máy")}{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
+      {stage === "script_review_creator" && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chờ Creator duyệt</p>{item.shots?.length ? <div className="rounded-2xl border border-border bg-muted/30 p-3"><h3 className="text-sm font-semibold">Checklist Shot quay</h3><div className="mt-3 grid gap-2">{item.shots.map((shot, index) => <label key={`${shot.no}-${index}`} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 text-xs ${completedShots[index] ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-background"}`}><input type="checkbox" checked={Boolean(completedShots[index])} onChange={(event) => setCompletedShots((current) => ({ ...current, [index]: event.target.checked }))} className="mt-0.5 size-4 accent-emerald-600" /><span><strong className="block">Shot {index + 1}: {shot.shot || "Góc máy chưa đặt tên"}</strong><span className="mt-1 block text-muted-foreground">{shot.text || shot.angle || "Chưa có mô tả hành động"}</span></span></label>)}</div></div> : null}{field("Góp ý của Lead", "leadNote", "Lead có thể góp ý tại đây", true)}</div>}
+      {isScript && <div className="grid gap-4"><p className="text-sm font-semibold">Kịch bản chi tiết</p>{field("Hook 3s", "goal", "Hook mở đầu")}{field("Kịch bản thoại / Voice", "leadNote", "Voice-over")}<section className="rounded-2xl border border-border bg-muted/30 p-3"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-semibold">Shot list · Góc quay / Hành động</h3><p className="mt-1 text-xs text-muted-foreground">Mỗi shot gồm góc máy và mô tả hành động, bối cảnh.</p></div><span className="rounded-full bg-background px-2 py-1 text-[10px]">{shots.length} shot</span></div><div className="mt-3 grid gap-2">{shots.map((shot, index) => <div key={index} className="grid gap-2 rounded-xl border border-border bg-background p-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_auto] sm:items-start"><label className="grid gap-1 text-[11px] font-medium"><span>Shot {index + 1} · Tên / loại góc máy</span><input value={shot.shot} onChange={(event) => updateShot(index, "shot", event.target.value)} placeholder="Cận cảnh / Toàn cảnh / Bán thân" className="h-9 rounded-lg border border-border bg-card px-2 text-xs" /></label><label className="grid gap-1 text-[11px] font-medium"><span>Mô tả hành động & bối cảnh</span><textarea value={shot.text} onChange={(event) => updateShot(index, "text", event.target.value)} placeholder="Chân bước vào khung hình, xoay người 180 độ..." className="min-h-9 rounded-lg border border-border bg-card p-2 text-xs" /></label><button type="button" onClick={() => removeShot(index)} aria-label={`Xóa Shot ${index + 1}`} className="mt-5 rounded-lg p-2 text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></button></div>)}</div><button type="button" onClick={addShot} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs font-semibold hover:bg-background"><Plus className="size-4" />Thêm Shot quay</button></section>{field("Sản phẩm gắn kèm", "contentType", "Tên sản phẩm")}</div>}
       {isProduction && <div className="grid gap-4 sm:grid-cols-2"><p className="sm:col-span-2 text-sm font-semibold">Sản xuất & dựng</p>{field("Bối cảnh / Set", "location", "Studio / ngo��i cảnh")}{field("Outfit", "outfit", "Mô tả outfit")}{field("Lịch quay", "scheduledAt", "YYYY-MM-DD HH:mm")}{field("Link Drive File Raw", "reference", "https://drive.google.com/...")}{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isVideoRevision && <div className="grid gap-4"><p className="text-sm font-semibold">Nộp lại bản dựng video</p>{field("Link / File Video Dựng", "finalVideoLink", "https://...")}</div>}
       {isReview && <div className="grid gap-4"><p className="text-sm font-semibold">Duyệt video</p>{item.finalVideoLink && <SmartVideoPreview url={item.finalVideoLink} />}<label data-feedback-form className="grid gap-1.5 text-xs font-medium">Feedback / Góp ý của Lead<textarea value={draft.leadNote} onChange={(event) => update("leadNote", event.target.value)} placeholder="Nhập feedback tối thiểu 10 ký tự" className="min-h-24 rounded-lg border border-border bg-background p-3 text-sm" /></label></div>}
