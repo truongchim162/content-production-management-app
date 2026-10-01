@@ -16,6 +16,21 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 
+/** Removes undefined values while preserving Firestore sentinels and nested arrays. */
+export function sanitizeFirestoreData<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeFirestoreData(entry)) as T
+  }
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      result[key] = entry === undefined ? null : sanitizeFirestoreData(entry)
+    }
+    return result as T
+  }
+  return value
+}
+
 export type UserRole = 'lead' | 'content' | 'creator'
 export const roleLabels: Record<UserRole, string> = { lead: 'Lead', content: 'Content', creator: 'Creator' }
 export const demoAccounts = [
