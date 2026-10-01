@@ -134,6 +134,7 @@ type HistoryEntry = {
 
   const normalizeItem = (item: Partial<Item> & { id: string }): Item => ({
     ...item,
+    status: item.status === "approved_idea" ? "scripting" : item.status,
     title: item.title || "Chưa đặt tên",
     feedback: item.feedback || "",
     feedbackHistory: item.feedbackHistory || [],
@@ -3038,7 +3039,7 @@ type ScheduleEntry = { type: ScheduleType; shift: "morning" | "afternoon" | "ful
 
 const scheduleTypes: Record<ScheduleType, { label: string; icon: string; color: string }> = {
   studio: { label: "Studio / Văn phòng", icon: "●", color: "bg-emerald-500" },
-  onsite: { label: "Đi quay ngoại cảnh", icon: "🎬", color: "bg-zinc-900" },
+  onsite: { label: "Đi quay ngoại cảnh", icon: "���", color: "bg-zinc-900" },
   wfh: { label: "Làm online / WFH", icon: "●", color: "bg-sky-500" },
   off: { label: "Nghỉ phép", icon: "●", color: "bg-rose-500" },
 };
@@ -4141,7 +4142,7 @@ function LegacyLeadWorkspace({ user, view }: { user: User; view: string }) {
   message: `Ý tưởng '${item.title}' đã được duyệt. Vui lòng bắt đầu viết kịch bản.`,
   type: "status_change",
   linkId: item.id,
-  targetView: "Tất cả Content / Viết Kịch Bản",
+  targetView: "Tất c��� Content / Viết Kịch Bản",
   });
   }
   };
@@ -4649,7 +4650,9 @@ function LeadWorkspace({
   const persist = async (item: Item, patch: Partial<Item>) => {
     const publishDate = item.scheduledPublishDate || item.scheduledAt;
   const wasOverdue = item.status !== "published" && !!publishDate && new Date(publishDate).getTime() < Date.now();
-  const isIdeaApproval = item.status === "idea_pending" && patch.status === "scripting";
+  const isIdeaApproval =
+    ["idea_pending", "approved_idea"].includes(item.status) &&
+    ["scripting", "approved_idea"].includes(patch.status as string);
   const nextPatch =
     isIdeaApproval
       ? { ...patch, status: "scripting" as Status, approvedAt: serverTimestamp() }
@@ -4690,6 +4693,15 @@ function LeadWorkspace({
           current.id === item.id ? { ...current, ...saved.data() } as Item : current,
         ),
       );
+      if (isIdeaApproval && item.ownerId) {
+        await notifyUser(item.ownerId, {
+          title: "Ý tưởng đã được Lead duyệt",
+          message: `Ý tưởng '${item.title}' đã chuyển sang Cần viết / sửa kịch bản.`,
+          type: "status_change",
+          linkId: item.id,
+          targetView: "Tất cả Content / Viết Kịch Bản",
+        });
+      }
       if (item.ownerId && patch.status === "rejected")
         await notifyUser(item.ownerId, {
           title: "Content/Video bị từ chối",
